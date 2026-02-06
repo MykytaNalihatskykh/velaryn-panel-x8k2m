@@ -523,6 +523,9 @@ async function loadUserDataForProfile(ip) {
     // Update settings tab
     renderSettingsTab(userData);
     
+    // Update tracker tab
+    renderTrackerTab(userData);
+    
   } catch (error) {
     console.error('Failed to load user data:', error);
   }
@@ -705,6 +708,128 @@ function renderSettingsTab(userData) {
   
   document.getElementById('settingsTheme').textContent = settings.theme || 'dark';
   document.getElementById('settingsLanguage').textContent = settings.language || 'en';
+}
+
+function renderTrackerTab(userData) {
+  // Parse tracker data
+  let purchases = {};
+  let transactions = [];
+  let notes = {};
+  let ranks = {};
+  
+  if (userData) {
+    try { purchases = JSON.parse(userData.purchases || '{}'); } catch (e) {}
+    try { transactions = JSON.parse(userData.transactions || '[]'); } catch (e) {}
+    try { notes = JSON.parse(userData.tracker_notes || '{}'); } catch (e) {}
+    try { ranks = JSON.parse(userData.mv_ranks || '{}'); } catch (e) {}
+  }
+  
+  // Count items
+  const purchasesCount = Object.keys(purchases).reduce((sum, key) => {
+    if (key === 'defaultAccount') return sum;
+    return sum + Object.keys(purchases[key] || {}).length;
+  }, Object.keys(purchases.defaultAccount || {}).length);
+  
+  const notesCount = Object.keys(notes).length;
+  const ranksCount = Object.keys(ranks).length;
+  
+  // Update stats
+  document.getElementById('trackerPurchases').textContent = purchasesCount;
+  document.getElementById('trackerTransactions').textContent = transactions.length;
+  document.getElementById('trackerNotes').textContent = notesCount;
+  document.getElementById('trackerRanks').textContent = ranksCount;
+  
+  // Render Purchases
+  const purchasesList = document.getElementById('trackerPurchasesList');
+  if (purchasesCount === 0) {
+    purchasesList.innerHTML = '<div class="empty-state small">No purchases synced</div>';
+  } else {
+    let html = '';
+    // Default account purchases
+    if (purchases.defaultAccount) {
+      Object.entries(purchases.defaultAccount).forEach(([name, data]) => {
+        html += `
+          <div class="tracker-item">
+            <div class="item-header">
+              <span class="item-name">${escapeHtml(name)}</span>
+              <span class="item-value">${data.type || 'subscription'}</span>
+            </div>
+            <div class="item-details">${data.expiry ? `Expires: ${formatDate(data.expiry)}` : 'Active'}</div>
+          </div>
+        `;
+      });
+    }
+    // Other accounts
+    Object.entries(purchases).forEach(([account, subs]) => {
+      if (account === 'defaultAccount') return;
+      Object.entries(subs || {}).forEach(([name, data]) => {
+        html += `
+          <div class="tracker-item">
+            <div class="item-header">
+              <span class="item-name">${escapeHtml(name)}</span>
+              <span class="item-value">${data.type || 'subscription'}</span>
+            </div>
+            <div class="item-details">Account: ${account}</div>
+          </div>
+        `;
+      });
+    });
+    purchasesList.innerHTML = html || '<div class="empty-state small">No purchases</div>';
+  }
+  
+  // Render Transactions
+  const transactionsList = document.getElementById('trackerTransactionsList');
+  if (transactions.length === 0) {
+    transactionsList.innerHTML = '<div class="empty-state small">No transactions synced</div>';
+  } else {
+    transactionsList.innerHTML = transactions.map(tx => `
+      <div class="tracker-item">
+        <div class="item-header">
+          <span class="item-name">${escapeHtml(tx.name || tx.description || 'Transaction')}</span>
+          <span class="item-value">${tx.amount ? `$${tx.amount}` : ''}</span>
+        </div>
+        <div class="item-details">${tx.date ? formatDate(tx.date) : ''} ${tx.type || ''}</div>
+      </div>
+    `).join('');
+  }
+  
+  // Render Notes
+  const notesList = document.getElementById('trackerNotesList');
+  if (notesCount === 0) {
+    notesList.innerHTML = '<div class="empty-state small">No notes synced</div>';
+  } else {
+    notesList.innerHTML = Object.entries(notes).map(([key, note]) => {
+      const userName = key.replace('note_', '').replace(/_/g, ' ');
+      return `
+        <div class="tracker-item">
+          <div class="item-header">
+            <span class="item-name">${escapeHtml(userName)}</span>
+          </div>
+          <div class="item-note">${escapeHtml(note)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  // Render Ranks
+  const ranksList = document.getElementById('trackerRanksList');
+  if (ranksCount === 0) {
+    ranksList.innerHTML = '<div class="empty-state small">No ranks synced</div>';
+  } else {
+    const sortedRanks = Object.entries(ranks)
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => (b.rank || 0) - (a.rank || 0));
+    
+    ranksList.innerHTML = sortedRanks.map(r => `
+      <div class="tracker-item">
+        <div class="item-header">
+          <span class="item-name">${escapeHtml(r.nick || r.id)}</span>
+          <span class="item-value">Rank #${r.rank || '?'}</span>
+        </div>
+        <div class="item-details">ID: ${r.id}</div>
+      </div>
+    `).join('');
+  }
 }
 
 function showProfileTab(tabName) {
