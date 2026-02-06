@@ -714,6 +714,7 @@ function renderSettingsTab(userData) {
 let trackerUsersData = [];
 let trackerNotes = {};
 let trackerNickToId = {};
+let trackerTransactions = [];
 
 function renderTrackerTab(userData) {
   // Parse tracker data
@@ -734,6 +735,7 @@ function renderTrackerTab(userData) {
   // Store globally for other functions
   trackerNotes = notes;
   trackerNickToId = nickToId;
+  trackerTransactions = transactions;
   
   // Aggregate data by user
   const userMap = new Map();
@@ -835,7 +837,10 @@ function renderTrackerTab(userData) {
   // Render notes section
   renderTrackerNotes(trackerNotes, trackerNickToId);
   
-  // Render last sent section
+  // Render last transactions section
+  renderTrackerLastTransactions(trackerTransactions, trackerNickToId);
+  
+  // Render last sent messages section
   renderTrackerLastSent(userData);
 }
 
@@ -958,69 +963,146 @@ function renderTrackerNotes(notes, nickToId) {
   }).join('');
 }
 
+function renderTrackerLastTransactions(transactions, nickToId) {
+  const container = document.getElementById('trackerLastTransactionsSection');
+  if (!container) return;
+  
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    container.innerHTML = '<div class="empty-state small">No transactions synced</div>';
+    return;
+  }
+  
+  // Sort by date (newest first)
+  const sorted = [...transactions].sort((a, b) => {
+    const dateA = a.timestamp || a.date || 0;
+    const dateB = b.timestamp || b.date || 0;
+    return dateB - dateA;
+  }).slice(0, 20);
+  
+  container.innerHTML = sorted.map(tx => {
+    const nick = tx.nick || tx.username || 'Unknown';
+    const amount = tx.amount || 0;
+    const userId = tx.userId || nickToId[nick] || nickToId[nick.toLowerCase()] || null;
+    const chatUrl = userId 
+      ? `https://www.manyvids.com/messages/${userId}`
+      : `https://www.manyvids.com/Profile/${encodeURIComponent(nick)}/`;
+    const dateStr = tx.timestamp || tx.date ? formatDate(tx.timestamp || tx.date) : 'Unknown';
+    const type = tx.type || tx.item || 'Purchase';
+    
+    let amountClass = '';
+    if (amount >= 500) amountClass = 'whale';
+    else if (amount >= 100) amountClass = 'high';
+    
+    return `
+      <div class="tracker-tx-item">
+        <div class="tracker-tx-avatar">💰</div>
+        <div class="tracker-tx-info">
+          <div class="tracker-tx-user">
+            <a href="${chatUrl}" target="_blank">${escapeHtml(nick)}</a>
+          </div>
+          <div class="tracker-tx-details">${escapeHtml(type)} • ${dateStr}</div>
+        </div>
+        <div class="tracker-tx-amount ${amountClass}">$${amount.toFixed(2)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderTrackerLastSent(userData) {
   const container = document.getElementById('trackerLastSentSection');
   if (!container) return;
   
   let sendHistory = [];
+  let invites = [];
+  let personalInvites = [];
   let followers = [];
   
   if (userData) {
     try { sendHistory = JSON.parse(userData.send_history || '[]'); } catch (e) {}
+    try { invites = JSON.parse(userData.invites || '[]'); } catch (e) {}
+    try { personalInvites = JSON.parse(userData.personal_invites || '[]'); } catch (e) {}
     try { followers = JSON.parse(userData.followers || '[]'); } catch (e) {}
   }
   
-  // Get recently sent followers
-  const sentFollowers = followers
-    .filter(f => f.invited || f.status === 'invited' || f.status === 'sent')
-    .map(f => ({
-      nick: f.nickname || f.nick || f.username || 'Unknown',
-      id: f.id || f.mvid,
-      timestamp: f.inviteTimestamp || f.sentAt || f.lastSent,
-      status: f.status || 'sent'
-    }))
-    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-    .slice(0, 20);
+  // Collect all sent messages with content
+  const allMessages = [];
   
-  // Also include send history if available
-  const historyItems = sendHistory
-    .filter(h => h.target || h.nickname || h.to)
-    .map(h => ({
-      nick: h.target || h.nickname || h.to || 'Unknown',
-      id: h.userId || h.id,
-      timestamp: h.timestamp || h.sentAt || h.date,
-      status: 'sent'
-    }))
-    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-    .slice(0, 20);
+  // From send history
+  if (Array.isArray(sendHistory)) {
+    sendHistory.forEach(h => {
+      if (h.message || h.text || h.content) {
+        allMessages.push({
+          nick: h.target || h.nickname || h.to || 'Unknown',
+          id: h.userId || h.id,
+          timestamp: h.timestamp || h.sentAt || h.date,
+          message: h.message || h.text || h.content
+        });
+      }
+    });
+  }
   
-  // Merge and dedupe
-  const allSent = [...sentFollowers, ...historyItems]
-    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-    .slice(0, 30);
+  // From invites (templates that were used)
+  if (Array.isArray(invites)) {
+    invites.forEach(inv => {
+      if (inv.lastUsed && inv.text) {
+        allMessages.push({
+          nick: inv.lastSentTo || 'Multiple users',
+          id: null,
+          timestamp: inv.lastUsed,
+          message: inv.text,
+          isInvite: true,
+          inviteName: inv.name || 'Invite'
+        });
+      }
+    });
+  }
   
-  if (allSent.length === 0) {
-    container.innerHTML = '<div class="empty-state small">No send history synced</div>';
+  // From followers with invite info
+  if (Array.isArray(followers)) {
+    followers.forEach(f => {
+      if ((f.invited || f.status === 'sent') && f.sentMessage) {
+        allMessages.push({
+          nick: f.nickname || f.nick || f.username || 'Unknown',
+          id: f.id || f.mvid,
+          timestamp: f.inviteTimestamp || f.sentAt,
+          message: f.sentMessage
+        });
+      }
+    });
+  }
+  
+  // Sort by timestamp (newest first) and limit
+  const sorted = allMessages
+    .filter(m => m.message)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, 15);
+  
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="empty-state small">No sent messages with content found</div>';
     return;
   }
   
-  container.innerHTML = allSent.map(item => {
+  container.innerHTML = sorted.map(item => {
     const initials = item.nick ? item.nick.slice(0, 2).toUpperCase() : '📤';
     const chatUrl = item.id 
       ? `https://www.manyvids.com/messages/${item.id}`
       : `https://www.manyvids.com/Profile/${encodeURIComponent(item.nick)}/`;
-    const timeAgo = item.timestamp ? formatDate(item.timestamp) : 'Unknown time';
+    const dateStr = item.timestamp ? formatDate(item.timestamp) : 'Unknown time';
+    const label = item.isInvite ? `(Template: ${item.inviteName})` : '';
     
     return `
-      <div class="tracker-sent-item">
-        <div class="tracker-sent-avatar">${initials}</div>
-        <div class="tracker-sent-info">
-          <div class="tracker-sent-target">
-            <a href="${chatUrl}" target="_blank">${escapeHtml(item.nick)}</a>
+      <div class="tracker-sent-message">
+        <div class="tracker-sent-header">
+          <div class="tracker-sent-to">
+            <div class="tracker-sent-to-avatar">${initials}</div>
+            <div class="tracker-sent-to-name">
+              <a href="${chatUrl}" target="_blank">${escapeHtml(item.nick)}</a>
+              ${label ? `<span style="color:#71717a;font-size:11px;margin-left:6px">${label}</span>` : ''}
+            </div>
           </div>
-          <div class="tracker-sent-time">${timeAgo}</div>
+          <span class="tracker-sent-date">${dateStr}</span>
         </div>
-        <span class="tracker-sent-status success">✓ Sent</span>
+        <div class="tracker-sent-content">${escapeHtml(item.message)}</div>
       </div>
     `;
   }).join('');
