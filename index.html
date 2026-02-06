@@ -908,8 +908,8 @@
 
     .api-key {
       font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 12px;
-      max-width: 200px;
+      font-size: 11px;
+      word-break: break-all;
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -939,8 +939,6 @@
       font-size: 13px;
       line-height: 1.5;
       white-space: pre-wrap;
-      max-height: 100px;
-      overflow-y: auto;
     }
 
     .invite-type {
@@ -995,7 +993,7 @@
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 12px;
       overflow: hidden;
-      max-height: 400px;
+      max-height: 600px;
       overflow-y: auto;
     }
 
@@ -1026,7 +1024,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: 500px;
+      max-height: 800px;
       overflow-y: auto;
     }
 
@@ -1108,7 +1106,7 @@
       <div class="sidebar-footer">
         <div class="auto-refresh">
           <span class="dot"></span>
-          <span>Auto-refresh: 30s</span>
+          <span>Auto-refresh: 5s</span>
         </div>
         <button class="logout-btn" onclick="logout()">
           <span class="icon">🚪</span>
