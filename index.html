@@ -1069,67 +1069,151 @@
       margin-bottom: 24px;
     }
 
-    .tracker-sections {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-
-    .tracker-card {
-      max-height: 400px;
-      overflow: hidden;
+    .tracker-toolbar {
       display: flex;
-      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
-    .tracker-card h4 {
-      flex-shrink: 0;
-    }
-
-    .tracker-content {
+    .tracker-toolbar input {
       flex: 1;
-      overflow-y: auto;
-      padding-right: 8px;
-    }
-
-    .tracker-item {
-      padding: 12px;
-      background: rgba(0, 0, 0, 0.2);
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
-      margin-bottom: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      color: #fff;
+      font-size: 14px;
     }
 
-    .tracker-item:last-child {
-      margin-bottom: 0;
+    .tracker-toolbar input:focus {
+      outline: none;
+      border-color: #7c3aed;
     }
 
-    .tracker-item .item-header {
+    .tracker-toolbar select {
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .tracker-table-container {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      overflow: hidden;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    .tracker-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tracker-table th,
+    .tracker-table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .tracker-table th {
+      background: rgba(0, 0, 0, 0.3);
+      color: #71717a;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .tracker-table tr:hover {
+      background: rgba(124, 58, 237, 0.1);
+    }
+
+    .tracker-user {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 4px;
+      gap: 10px;
     }
 
-    .tracker-item .item-name {
+    .tracker-user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .tracker-user-link {
       color: #a78bfa;
       font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
     }
 
-    .tracker-item .item-value {
+    .tracker-user-link:hover {
+      color: #c4b5fd;
+      text-decoration: underline;
+    }
+
+    .tracker-amount {
       color: #34d399;
-      font-size: 12px;
+      font-weight: 700;
+      font-size: 15px;
     }
 
-    .tracker-item .item-details {
+    .tracker-amount.high {
+      color: #fbbf24;
+    }
+
+    .tracker-amount.whale {
+      color: #f87171;
+    }
+
+    .tracker-rank {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(251, 191, 36, 0.15);
+      color: #fbbf24;
+    }
+
+    .tracker-rank.top10 {
+      background: rgba(248, 113, 113, 0.15);
+      color: #f87171;
+    }
+
+    .tracker-rank.top100 {
+      background: rgba(167, 139, 250, 0.15);
+      color: #a78bfa;
+    }
+
+    .tracker-note {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: #71717a;
       font-size: 12px;
     }
 
-    .tracker-item .item-note {
-      color: #a1a1aa;
+    .tracker-date {
+      color: #71717a;
       font-size: 13px;
-      margin-top: 4px;
-      white-space: pre-wrap;
     }
 
     .empty-state.small {
@@ -1141,8 +1225,17 @@
       .profile-stats, .tracker-stats {
         grid-template-columns: repeat(2, 1fr);
       }
-      .info-grid, .settings-grid, .tracker-sections {
+      .info-grid, .settings-grid {
         grid-template-columns: 1fr;
+      }
+      .tracker-toolbar {
+        flex-direction: column;
+      }
+      .tracker-table-container {
+        overflow-x: auto;
+      }
+      .tracker-table {
+        min-width: 700px;
       }
     }
   </style>
@@ -1419,55 +1512,56 @@
         <div class="profile-tab-content" id="tabTracker">
           <div class="tracker-stats" id="trackerStats">
             <div class="profile-stat">
-              <span class="stat-value" id="trackerPurchases">0</span>
-              <span class="stat-label">Purchases</span>
+              <span class="stat-value" id="trackerTotalSpent">$0</span>
+              <span class="stat-label">Total Spent</span>
             </div>
             <div class="profile-stat">
               <span class="stat-value" id="trackerTransactions">0</span>
               <span class="stat-label">Transactions</span>
             </div>
             <div class="profile-stat">
+              <span class="stat-value" id="trackerUniqueUsers">0</span>
+              <span class="stat-label">Unique Spenders</span>
+            </div>
+            <div class="profile-stat">
               <span class="stat-value" id="trackerNotes">0</span>
               <span class="stat-label">Notes</span>
             </div>
-            <div class="profile-stat">
-              <span class="stat-value" id="trackerRanks">0</span>
-              <span class="stat-label">Ranked Users</span>
-            </div>
           </div>
           
-          <div class="tracker-sections">
-            <!-- Purchases -->
-            <div class="info-card tracker-card">
-              <h4>💳 Purchases / Subscriptions</h4>
-              <div class="tracker-content" id="trackerPurchasesList">
-                <div class="empty-state small">No purchases synced</div>
-              </div>
-            </div>
-            
-            <!-- Transactions -->
-            <div class="info-card tracker-card">
-              <h4>📊 Transactions</h4>
-              <div class="tracker-content" id="trackerTransactionsList">
-                <div class="empty-state small">No transactions synced</div>
-              </div>
-            </div>
-            
-            <!-- Notes -->
-            <div class="info-card tracker-card">
-              <h4>📝 User Notes</h4>
-              <div class="tracker-content" id="trackerNotesList">
-                <div class="empty-state small">No notes synced</div>
-              </div>
-            </div>
-            
-            <!-- Ranks -->
-            <div class="info-card tracker-card">
-              <h4>🏆 User Ranks</h4>
-              <div class="tracker-content" id="trackerRanksList">
-                <div class="empty-state small">No ranks synced</div>
-              </div>
-            </div>
+          <!-- Search -->
+          <div class="tracker-toolbar">
+            <input type="text" id="trackerSearch" placeholder="Search by nickname...">
+            <select id="trackerSort">
+              <option value="spent">Sort by Spent (High → Low)</option>
+              <option value="transactions">Sort by Transactions</option>
+              <option value="rank">Sort by Rank</option>
+              <option value="recent">Sort by Recent</option>
+            </select>
+          </div>
+          
+          <!-- Users Table -->
+          <div class="tracker-table-container">
+            <table class="tracker-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Total Spent</th>
+                  <th>Transactions</th>
+                  <th>Rank</th>
+                  <th>Last Payment</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody id="trackerTableBody">
+                <tr>
+                  <td colspan="6" class="empty-state">
+                    <div class="icon">📊</div>
+                    <div>No tracker data synced yet</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
