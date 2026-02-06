@@ -710,126 +710,213 @@ function renderSettingsTab(userData) {
   document.getElementById('settingsLanguage').textContent = settings.language || 'en';
 }
 
+// Store tracker data globally for sorting/filtering
+let trackerUsersData = [];
+
 function renderTrackerTab(userData) {
   // Parse tracker data
   let purchases = {};
   let transactions = [];
   let notes = {};
   let ranks = {};
+  let nickToId = {};
   
   if (userData) {
     try { purchases = JSON.parse(userData.purchases || '{}'); } catch (e) {}
     try { transactions = JSON.parse(userData.transactions || '[]'); } catch (e) {}
     try { notes = JSON.parse(userData.tracker_notes || '{}'); } catch (e) {}
     try { ranks = JSON.parse(userData.mv_ranks || '{}'); } catch (e) {}
+    try { nickToId = JSON.parse(userData.mv_nick_to_id || '{}'); } catch (e) {}
   }
   
-  // Count items
-  const purchasesCount = Object.keys(purchases).reduce((sum, key) => {
-    if (key === 'defaultAccount') return sum;
-    return sum + Object.keys(purchases[key] || {}).length;
-  }, Object.keys(purchases.defaultAccount || {}).length);
+  // Aggregate data by user
+  const userMap = new Map();
   
-  const notesCount = Object.keys(notes).length;
-  const ranksCount = Object.keys(ranks).length;
+  // Process transactions
+  if (Array.isArray(transactions)) {
+    transactions.forEach(tx => {
+      const nick = tx.nick || tx.username || 'Unknown';
+      const key = nick.toLowerCase();
+      
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          nick: nick,
+          totalSpent: 0,
+          transactionCount: 0,
+          lastTransaction: null,
+          lastAmount: 0,
+          rank: null,
+          note: null,
+          userId: tx.userId || null
+        });
+      }
+      
+      const user = userMap.get(key);
+      user.totalSpent += (tx.amount || 0);
+      user.transactionCount += 1;
+      
+      const txDate = tx.transactionDate || tx.date;
+      if (txDate && (!user.lastTransaction || txDate > user.lastTransaction)) {
+        user.lastTransaction = txDate;
+        user.lastAmount = tx.amount || 0;
+      }
+      
+      if (tx.userId) user.userId = tx.userId;
+    });
+  }
   
-  // Update stats
-  document.getElementById('trackerPurchases').textContent = purchasesCount;
-  document.getElementById('trackerTransactions').textContent = transactions.length;
-  document.getElementById('trackerNotes').textContent = notesCount;
-  document.getElementById('trackerRanks').textContent = ranksCount;
-  
-  // Render Purchases
-  const purchasesList = document.getElementById('trackerPurchasesList');
-  if (purchasesCount === 0) {
-    purchasesList.innerHTML = '<div class="empty-state small">No purchases synced</div>';
-  } else {
-    let html = '';
-    // Default account purchases
-    if (purchases.defaultAccount) {
-      Object.entries(purchases.defaultAccount).forEach(([name, data]) => {
-        html += `
-          <div class="tracker-item">
-            <div class="item-header">
-              <span class="item-name">${escapeHtml(name)}</span>
-              <span class="item-value">${data.type || 'subscription'}</span>
-            </div>
-            <div class="item-details">${data.expiry ? `Expires: ${formatDate(data.expiry)}` : 'Active'}</div>
-          </div>
-        `;
+  // Add ranks
+  Object.entries(ranks).forEach(([userId, data]) => {
+    const nick = data.nick || userId;
+    const key = nick.toLowerCase();
+    
+    if (userMap.has(key)) {
+      userMap.get(key).rank = data.rank;
+      userMap.get(key).userId = userId;
+    } else {
+      userMap.set(key, {
+        nick: nick,
+        totalSpent: 0,
+        transactionCount: 0,
+        lastTransaction: null,
+        lastAmount: 0,
+        rank: data.rank,
+        note: null,
+        userId: userId
       });
     }
-    // Other accounts
-    Object.entries(purchases).forEach(([account, subs]) => {
-      if (account === 'defaultAccount') return;
-      Object.entries(subs || {}).forEach(([name, data]) => {
-        html += `
-          <div class="tracker-item">
-            <div class="item-header">
-              <span class="item-name">${escapeHtml(name)}</span>
-              <span class="item-value">${data.type || 'subscription'}</span>
-            </div>
-            <div class="item-details">Account: ${account}</div>
-          </div>
-        `;
-      });
-    });
-    purchasesList.innerHTML = html || '<div class="empty-state small">No purchases</div>';
-  }
+  });
   
-  // Render Transactions
-  const transactionsList = document.getElementById('trackerTransactionsList');
-  if (transactions.length === 0) {
-    transactionsList.innerHTML = '<div class="empty-state small">No transactions synced</div>';
-  } else {
-    transactionsList.innerHTML = transactions.map(tx => `
-      <div class="tracker-item">
-        <div class="item-header">
-          <span class="item-name">${escapeHtml(tx.name || tx.description || 'Transaction')}</span>
-          <span class="item-value">${tx.amount ? `$${tx.amount}` : ''}</span>
-        </div>
-        <div class="item-details">${tx.date ? formatDate(tx.date) : ''} ${tx.type || ''}</div>
-      </div>
-    `).join('');
-  }
-  
-  // Render Notes
-  const notesList = document.getElementById('trackerNotesList');
-  if (notesCount === 0) {
-    notesList.innerHTML = '<div class="empty-state small">No notes synced</div>';
-  } else {
-    notesList.innerHTML = Object.entries(notes).map(([key, note]) => {
-      const userName = key.replace('note_', '').replace(/_/g, ' ');
-      return `
-        <div class="tracker-item">
-          <div class="item-header">
-            <span class="item-name">${escapeHtml(userName)}</span>
-          </div>
-          <div class="item-note">${escapeHtml(note)}</div>
-        </div>
-      `;
-    }).join('');
-  }
-  
-  // Render Ranks
-  const ranksList = document.getElementById('trackerRanksList');
-  if (ranksCount === 0) {
-    ranksList.innerHTML = '<div class="empty-state small">No ranks synced</div>';
-  } else {
-    const sortedRanks = Object.entries(ranks)
-      .map(([id, data]) => ({ id, ...data }))
-      .sort((a, b) => (b.rank || 0) - (a.rank || 0));
+  // Add notes
+  Object.entries(notes).forEach(([noteKey, noteText]) => {
+    // Extract nick from key (mv_note_NICK or note_NICK)
+    const nick = noteKey.replace(/^(mv_)?note_/, '').replace(/_/g, ' ');
+    const key = nick.toLowerCase();
     
-    ranksList.innerHTML = sortedRanks.map(r => `
-      <div class="tracker-item">
-        <div class="item-header">
-          <span class="item-name">${escapeHtml(r.nick || r.id)}</span>
-          <span class="item-value">Rank #${r.rank || '?'}</span>
-        </div>
-        <div class="item-details">ID: ${r.id}</div>
-      </div>
-    `).join('');
+    if (userMap.has(key)) {
+      userMap.get(key).note = noteText;
+    } else {
+      userMap.set(key, {
+        nick: nick,
+        totalSpent: 0,
+        transactionCount: 0,
+        lastTransaction: null,
+        lastAmount: 0,
+        rank: null,
+        note: noteText,
+        userId: null
+      });
+    }
+  });
+  
+  // Convert to array
+  trackerUsersData = Array.from(userMap.values());
+  
+  // Calculate stats
+  const totalSpent = trackerUsersData.reduce((sum, u) => sum + u.totalSpent, 0);
+  const totalTransactions = trackerUsersData.reduce((sum, u) => sum + u.transactionCount, 0);
+  const notesCount = trackerUsersData.filter(u => u.note).length;
+  
+  // Update stats
+  document.getElementById('trackerTotalSpent').textContent = `$${totalSpent.toFixed(2)}`;
+  document.getElementById('trackerTransactions').textContent = totalTransactions;
+  document.getElementById('trackerUniqueUsers').textContent = trackerUsersData.filter(u => u.totalSpent > 0).length;
+  document.getElementById('trackerNotes').textContent = notesCount;
+  
+  // Render table
+  renderTrackerTable();
+}
+
+function renderTrackerTable() {
+  const tbody = document.getElementById('trackerTableBody');
+  const searchQuery = document.getElementById('trackerSearch')?.value?.toLowerCase() || '';
+  const sortBy = document.getElementById('trackerSort')?.value || 'spent';
+  
+  // Filter
+  let filtered = trackerUsersData;
+  if (searchQuery) {
+    filtered = trackerUsersData.filter(u => 
+      u.nick?.toLowerCase().includes(searchQuery) ||
+      u.note?.toLowerCase().includes(searchQuery)
+    );
   }
+  
+  // Sort
+  switch (sortBy) {
+    case 'spent':
+      filtered.sort((a, b) => b.totalSpent - a.totalSpent);
+      break;
+    case 'transactions':
+      filtered.sort((a, b) => b.transactionCount - a.transactionCount);
+      break;
+    case 'rank':
+      filtered.sort((a, b) => (a.rank || 99999) - (b.rank || 99999));
+      break;
+    case 'recent':
+      filtered.sort((a, b) => (b.lastTransaction || 0) - (a.lastTransaction || 0));
+      break;
+  }
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty-state">
+          <div class="icon">📊</div>
+          <div>No tracker data synced yet</div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = filtered.map(user => {
+    const initials = user.nick ? user.nick.slice(0, 2).toUpperCase() : '??';
+    const amountClass = user.totalSpent >= 500 ? 'whale' : (user.totalSpent >= 100 ? 'high' : '');
+    const rankClass = user.rank && user.rank <= 10 ? 'top10' : (user.rank && user.rank <= 100 ? 'top100' : '');
+    
+    // ManyVids chat URL
+    const chatUrl = user.userId 
+      ? `https://www.manyvids.com/messages/${user.userId}`
+      : `https://www.manyvids.com/Profile/${encodeURIComponent(user.nick)}/`;
+    
+    return `
+      <tr>
+        <td>
+          <div class="tracker-user">
+            <div class="tracker-user-avatar">${initials}</div>
+            <a href="${chatUrl}" target="_blank" class="tracker-user-link">${escapeHtml(user.nick)}</a>
+          </div>
+        </td>
+        <td>
+          <span class="tracker-amount ${amountClass}">$${user.totalSpent.toFixed(2)}</span>
+        </td>
+        <td>${user.transactionCount}</td>
+        <td>
+          ${user.rank 
+            ? `<span class="tracker-rank ${rankClass}">#${user.rank}</span>` 
+            : '<span style="color: #71717a;">-</span>'
+          }
+        </td>
+        <td class="tracker-date">
+          ${user.lastTransaction 
+            ? `${formatDate(user.lastTransaction)} ($${user.lastAmount.toFixed(2)})`
+            : '-'
+          }
+        </td>
+        <td>
+          <span class="tracker-note" title="${escapeHtml(user.note || '')}">${escapeHtml(user.note || '-')}</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Tracker search and sort handlers (initialized on page load)
+function initTrackerHandlers() {
+  const searchEl = document.getElementById('trackerSearch');
+  const sortEl = document.getElementById('trackerSort');
+  if (searchEl) searchEl.addEventListener('input', renderTrackerTable);
+  if (sortEl) sortEl.addEventListener('change', renderTrackerTable);
 }
 
 function showProfileTab(tabName) {
@@ -891,3 +978,4 @@ document.getElementById('databaseSearch').addEventListener('input', () => {
 
 // === INIT ===
 checkAuth();
+initTrackerHandlers();
