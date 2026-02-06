@@ -44,7 +44,7 @@ function checkAuth() {
 // === AUTO REFRESH ===
 function startAutoRefresh() {
   if (autoRefreshInterval) return;
-  autoRefreshInterval = setInterval(loadData, 30000);
+  autoRefreshInterval = setInterval(loadData, 5000); // Refresh every 5 seconds for real-time updates
 }
 
 function stopAutoRefresh() {
@@ -628,7 +628,7 @@ function renderDatabaseTab(userData) {
     );
   }
   
-  tbody.innerHTML = filtered.slice(0, 100).map((f, idx) => `
+  tbody.innerHTML = filtered.map((f, idx) => `
     <tr>
       <td>${f.number || idx + 1}</td>
       <td style="color: #a78bfa; font-weight: 500;">${f.nickname || f.id || '-'}</td>
@@ -636,10 +636,6 @@ function renderDatabaseTab(userData) {
       <td>${f.invited ? '✅' : '❌'}</td>
     </tr>
   `).join('');
-  
-  if (filtered.length > 100) {
-    tbody.innerHTML += `<tr><td colspan="4" style="text-align: center; color: #71717a;">... and ${filtered.length - 100} more</td></tr>`;
-  }
 }
 
 function getStatusColor(status) {
@@ -679,7 +675,7 @@ function renderHistoryTab(userData) {
     return;
   }
   
-  container.innerHTML = history.slice(0, 50).map(item => `
+  container.innerHTML = history.map(item => `
     <div class="history-item">
       <div class="target">${item.target || item.nickname || item.to || 'Unknown'}</div>
       <div class="time">${formatDate(item.timestamp || item.sentAt || item.date)}</div>
@@ -695,11 +691,10 @@ function renderSettingsTab(userData) {
     return;
   }
   
-  // API Key (masked)
+  // API Key (full)
   const apiKey = userData.groq_api_key;
   if (apiKey) {
-    const masked = apiKey.substring(0, 8) + '...' + apiKey.substring(apiKey.length - 4);
-    document.getElementById('settingsGroqKey').textContent = masked;
+    document.getElementById('settingsGroqKey').textContent = apiKey;
   } else {
     document.getElementById('settingsGroqKey').textContent = 'Not set';
   }
