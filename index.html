@@ -1364,6 +1364,153 @@
       color: #fbbf24;
     }
 
+    .tracker-extra-sections.full-width {
+      grid-template-columns: 1fr;
+    }
+
+    .tracker-extra-card.wide {
+      width: 100%;
+    }
+
+    /* Transaction Items */
+    .tracker-tx-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .tracker-tx-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .tracker-tx-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #f59e0b, #fbbf24);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .tracker-tx-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tracker-tx-user {
+      color: #fbbf24;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .tracker-tx-user a {
+      color: #fbbf24;
+      text-decoration: none;
+    }
+
+    .tracker-tx-user a:hover {
+      color: #fcd34d;
+      text-decoration: underline;
+    }
+
+    .tracker-tx-details {
+      color: #71717a;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .tracker-tx-amount {
+      font-weight: 700;
+      font-size: 16px;
+      color: #34d399;
+    }
+
+    .tracker-tx-amount.high {
+      color: #f59e0b;
+    }
+
+    .tracker-tx-amount.whale {
+      color: #ef4444;
+    }
+
+    /* Message Content */
+    .tracker-sent-message {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .tracker-sent-message:last-child {
+      margin-bottom: 0;
+    }
+
+    .tracker-sent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .tracker-sent-to {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tracker-sent-to-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #10b981, #34d399);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .tracker-sent-to-name {
+      color: #34d399;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .tracker-sent-to-name a {
+      color: #34d399;
+      text-decoration: none;
+    }
+
+    .tracker-sent-to-name a:hover {
+      color: #6ee7b7;
+      text-decoration: underline;
+    }
+
+    .tracker-sent-date {
+      color: #71717a;
+      font-size: 11px;
+    }
+
+    .tracker-sent-content {
+      background: rgba(167, 139, 250, 0.1);
+      border-left: 3px solid #a78bfa;
+      padding: 12px;
+      border-radius: 0 8px 8px 0;
+      color: #d4d4d8;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
     @media (max-width: 768px) {
       .profile-stats, .tracker-stats {
         grid-template-columns: repeat(2, 1fr);
@@ -1382,6 +1529,11 @@
       }
       .tracker-extra-sections {
         grid-template-columns: 1fr;
+      }
+      .tracker-sent-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
       }
     }
   </style>
@@ -1720,8 +1872,18 @@
               </div>
             </div>
             
-            <!-- Last Sent Messages -->
+            <!-- Last Transactions -->
             <div class="tracker-extra-card">
+              <h4>💰 Last Transactions</h4>
+              <div class="tracker-extra-content" id="trackerLastTransactionsSection">
+                <div class="empty-state small">No transactions synced</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Sent Messages Section -->
+          <div class="tracker-extra-sections full-width">
+            <div class="tracker-extra-card wide">
               <h4>📤 Last Sent Messages</h4>
               <div class="tracker-extra-content" id="trackerLastSentSection">
                 <div class="empty-state small">No send history synced</div>
