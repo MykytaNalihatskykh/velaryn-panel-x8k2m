@@ -712,6 +712,8 @@ function renderSettingsTab(userData) {
 
 // Store tracker data globally for sorting/filtering
 let trackerUsersData = [];
+let trackerNotes = {};
+let trackerNickToId = {};
 
 function renderTrackerTab(userData) {
   // Parse tracker data
@@ -728,6 +730,10 @@ function renderTrackerTab(userData) {
     try { ranks = JSON.parse(userData.mv_ranks || '{}'); } catch (e) {}
     try { nickToId = JSON.parse(userData.mv_nick_to_id || '{}'); } catch (e) {}
   }
+  
+  // Store globally for other functions
+  trackerNotes = notes;
+  trackerNickToId = nickToId;
   
   // Aggregate data by user
   const userMap = new Map();
@@ -825,6 +831,12 @@ function renderTrackerTab(userData) {
   
   // Render table
   renderTrackerTable();
+  
+  // Render notes section
+  renderTrackerNotes(trackerNotes, trackerNickToId);
+  
+  // Render last sent section
+  renderTrackerLastSent(userData);
 }
 
 function renderTrackerTable() {
@@ -907,6 +919,109 @@ function renderTrackerTable() {
           <span class="tracker-note" title="${escapeHtml(user.note || '')}">${escapeHtml(user.note || '-')}</span>
         </td>
       </tr>
+    `;
+  }).join('');
+}
+
+function renderTrackerNotes(notes, nickToId) {
+  const container = document.getElementById('trackerNotesSection');
+  if (!container) return;
+  
+  const notesArray = Object.entries(notes);
+  
+  if (notesArray.length === 0) {
+    container.innerHTML = '<div class="empty-state small">No notes synced</div>';
+    return;
+  }
+  
+  // Sort by key (newest first if we had timestamps, but for now alphabetically)
+  notesArray.sort((a, b) => a[0].localeCompare(b[0]));
+  
+  container.innerHTML = notesArray.map(([key, noteText]) => {
+    // Extract user info from key
+    const nick = key.replace(/^(mv_)?note_/, '').replace(/_/g, ' ');
+    const userId = nickToId[nick] || nickToId[nick.toLowerCase()] || null;
+    const chatUrl = userId 
+      ? `https://www.manyvids.com/messages/${userId}`
+      : `https://www.manyvids.com/Profile/${encodeURIComponent(nick)}/`;
+    
+    return `
+      <div class="tracker-note-item">
+        <div class="tracker-note-header">
+          <span class="tracker-note-user">
+            <a href="${chatUrl}" target="_blank">👤 ${escapeHtml(nick)}</a>
+          </span>
+        </div>
+        <div class="tracker-note-text">${escapeHtml(noteText)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTrackerLastSent(userData) {
+  const container = document.getElementById('trackerLastSentSection');
+  if (!container) return;
+  
+  let sendHistory = [];
+  let followers = [];
+  
+  if (userData) {
+    try { sendHistory = JSON.parse(userData.send_history || '[]'); } catch (e) {}
+    try { followers = JSON.parse(userData.followers || '[]'); } catch (e) {}
+  }
+  
+  // Get recently sent followers
+  const sentFollowers = followers
+    .filter(f => f.invited || f.status === 'invited' || f.status === 'sent')
+    .map(f => ({
+      nick: f.nickname || f.nick || f.username || 'Unknown',
+      id: f.id || f.mvid,
+      timestamp: f.inviteTimestamp || f.sentAt || f.lastSent,
+      status: f.status || 'sent'
+    }))
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, 20);
+  
+  // Also include send history if available
+  const historyItems = sendHistory
+    .filter(h => h.target || h.nickname || h.to)
+    .map(h => ({
+      nick: h.target || h.nickname || h.to || 'Unknown',
+      id: h.userId || h.id,
+      timestamp: h.timestamp || h.sentAt || h.date,
+      status: 'sent'
+    }))
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, 20);
+  
+  // Merge and dedupe
+  const allSent = [...sentFollowers, ...historyItems]
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, 30);
+  
+  if (allSent.length === 0) {
+    container.innerHTML = '<div class="empty-state small">No send history synced</div>';
+    return;
+  }
+  
+  container.innerHTML = allSent.map(item => {
+    const initials = item.nick ? item.nick.slice(0, 2).toUpperCase() : '📤';
+    const chatUrl = item.id 
+      ? `https://www.manyvids.com/messages/${item.id}`
+      : `https://www.manyvids.com/Profile/${encodeURIComponent(item.nick)}/`;
+    const timeAgo = item.timestamp ? formatDate(item.timestamp) : 'Unknown time';
+    
+    return `
+      <div class="tracker-sent-item">
+        <div class="tracker-sent-avatar">${initials}</div>
+        <div class="tracker-sent-info">
+          <div class="tracker-sent-target">
+            <a href="${chatUrl}" target="_blank">${escapeHtml(item.nick)}</a>
+          </div>
+          <div class="tracker-sent-time">${timeAgo}</div>
+        </div>
+        <span class="tracker-sent-status success">✓ Sent</span>
+      </div>
     `;
   }).join('');
 }
