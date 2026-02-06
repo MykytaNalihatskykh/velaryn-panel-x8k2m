@@ -1221,6 +1221,149 @@
       font-size: 13px;
     }
 
+    /* Tracker Extra Sections */
+    .tracker-extra-sections {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    .tracker-extra-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .tracker-extra-card h4 {
+      color: #a78bfa;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tracker-extra-content {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .tracker-note-item {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    .tracker-note-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .tracker-note-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .tracker-note-user {
+      color: #a78bfa;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .tracker-note-user a {
+      color: #a78bfa;
+      text-decoration: none;
+    }
+
+    .tracker-note-user a:hover {
+      color: #c4b5fd;
+      text-decoration: underline;
+    }
+
+    .tracker-note-text {
+      color: #d4d4d8;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    .tracker-sent-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .tracker-sent-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .tracker-sent-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #34d399);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .tracker-sent-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tracker-sent-target {
+      color: #34d399;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .tracker-sent-target a {
+      color: #34d399;
+      text-decoration: none;
+    }
+
+    .tracker-sent-target a:hover {
+      color: #6ee7b7;
+      text-decoration: underline;
+    }
+
+    .tracker-sent-time {
+      color: #71717a;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .tracker-sent-status {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .tracker-sent-status.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .tracker-sent-status.pending {
+      background: rgba(251, 191, 36, 0.15);
+      color: #fbbf24;
+    }
+
     @media (max-width: 768px) {
       .profile-stats, .tracker-stats {
         grid-template-columns: repeat(2, 1fr);
@@ -1236,6 +1379,9 @@
       }
       .tracker-table {
         min-width: 700px;
+      }
+      .tracker-extra-sections {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -1562,6 +1708,25 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+          
+          <!-- Notes & History Section -->
+          <div class="tracker-extra-sections">
+            <!-- User Notes -->
+            <div class="tracker-extra-card">
+              <h4>📝 User Notes</h4>
+              <div class="tracker-extra-content" id="trackerNotesSection">
+                <div class="empty-state small">No notes synced</div>
+              </div>
+            </div>
+            
+            <!-- Last Sent Messages -->
+            <div class="tracker-extra-card">
+              <h4>📤 Last Sent Messages</h4>
+              <div class="tracker-extra-content" id="trackerLastSentSection">
+                <div class="empty-state small">No send history synced</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
