@@ -197,6 +197,16 @@
     }
     .keys-filter:hover { color: #a1a1aa; }
     .keys-filter.active { background: #7c3aed; color: #fff; }
+    /* Users filter tabs */
+    .users-filter-tabs { display: flex; gap: 2px; background: #18181b; border-radius: 10px; padding: 3px; border: 1px solid #27272a; }
+    .users-filter-tabs .filter-tab {
+      padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      color: #71717a; cursor: pointer; border: none; background: none; transition: all 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .users-filter-tabs .filter-tab:hover { color: #a1a1aa; }
+    .users-filter-tabs .filter-tab.active { background: #7c3aed; color: #fff; }
+    .filter-count { font-size: 11px; opacity: 0.7; }
     .keys-layout { display: flex; gap: 20px; min-height: 500px; }
     .keys-user-list {
       width: 280px; flex-shrink: 0; background: #18181b; border: 1px solid #27272a;
@@ -473,7 +483,14 @@
       <section id="usersSection">
         <div class="table-card">
           <div class="table-header">
-            <h3>All Users</h3>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+              <h3 id="usersTitle">All Users</h3>
+              <div class="users-filter-tabs" id="usersFilterTabs">
+                <button class="filter-tab active" data-filter="all">All <span class="filter-count" id="filterCountAll">0</span></button>
+                <button class="filter-tab" data-filter="active">Active <span class="filter-count" id="filterCountActive">0</span></button>
+                <button class="filter-tab" data-filter="inactive">Inactive <span class="filter-count" id="filterCountInactive">0</span></button>
+              </div>
+            </div>
             <input type="text" id="searchInput" class="table-search" placeholder="Search by IP, location, note...">
           </div>
           <table>
