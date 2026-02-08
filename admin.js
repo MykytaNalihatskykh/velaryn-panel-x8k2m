@@ -448,7 +448,38 @@ function renderHistoryTab(ud) {
   let h = [];
   try { h = JSON.parse(ud.send_history || '[]'); } catch(e) {}
   if (!h.length) { c.innerHTML = '<div class="empty-state"><div class="icon">📜</div><div>No history</div></div>'; return; }
-  c.innerHTML = h.map(item => `<div class="history-item"><div class="target">${esc(item.target || item.nickname || item.to || '?')}</div><div class="time">${fmtDate(item.timestamp || item.sentAt || item.date)}</div></div>`).join('');
+  // Sort newest first
+  h.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  c.innerHTML = h.map(item => {
+    const isPersonal = item.type === 'personal';
+    // Extract username from target URL (e.g. https://www.manyvids.com/messages/12345 or profile URL)
+    let targetLabel = 'Auto Send';
+    let targetUrl = '#';
+    if (item.target) {
+      targetUrl = item.target;
+      // Try to extract readable ID from URL
+      const idMatch = item.target.match(/\/messages\/(\d+)/);
+      const profileMatch = item.target.match(/\/Profile\/([^/]+)/);
+      if (idMatch) targetLabel = `User #${idMatch[1]}`;
+      else if (profileMatch) targetLabel = decodeURIComponent(profileMatch[1]);
+      else targetLabel = item.target.replace(/^https?:\/\/(www\.)?manyvids\.com\/?/, '').slice(0, 40) || item.target;
+    }
+    // Status badge
+    let statusBadge = '';
+    if (isPersonal) {
+      if (item.success === true) statusBadge = '<span class="badge" style="background:rgba(52,211,153,0.15);color:#34d399;margin-left:8px;font-size:11px;">sent</span>';
+      else if (item.success === false) statusBadge = `<span class="badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:8px;font-size:11px;">failed</span>`;
+    }
+    // Type badge
+    const typeBadge = isPersonal
+      ? '<span style="color:#a78bfa;font-size:11px;margin-right:6px;">Personal</span>'
+      : '<span style="color:#60a5fa;font-size:11px;margin-right:6px;">Auto</span>';
+    // Target display
+    const targetHtml = item.target
+      ? `<a href="${esc(targetUrl)}" target="_blank" style="color:#a78bfa;font-weight:500;">${esc(targetLabel)}</a>`
+      : `<span style="color:#71717a;">${esc(targetLabel)}</span>`;
+    return `<div class="history-item"><div class="target">${typeBadge}${targetHtml}${statusBadge}</div><div class="time">${fmtDate(item.timestamp || item.sentAt || item.date)}</div></div>`;
+  }).join('');
 }
 
 function renderSettingsTab(ud) {
