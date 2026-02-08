@@ -218,6 +218,7 @@ function renderUsersTable() {
       <td>
         <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
         ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
+        <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:#ef4444;">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -492,6 +493,38 @@ async function unblockUser(ip) {
   } catch (e) { showToast('Failed to unblock', 'error'); }
 }
 
+async function deleteUser(deviceId, ip) {
+  const user = usersData.find(u => u.device_id === deviceId);
+  const displayName = user?.note || ip || deviceId?.substring(0, 12) || 'Unknown';
+  openModal('Delete User', `
+    <div style="text-align:center;padding:10px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+      <p style="color:#fafafa;font-size:15px;margin-bottom:8px;">Удалить пользователя <strong>${esc(displayName)}</strong>?</p>
+      <p style="color:#a1a1aa;font-size:13px;">IP: ${esc(ip || 'N/A')}</p>
+      <p style="color:#a1a1aa;font-size:13px;">Device: ${esc(deviceId ? deviceId.substring(0, 16) + '...' : 'N/A')}</p>
+      <p style="color:#ef4444;font-size:12px;margin-top:12px;">Это удалит все данные пользователя (users + user_data). Действие необратимо.</p>
+    </div>
+  `, async () => {
+    try {
+      // Удаляем из users и user_data по device_id
+      if (deviceId) {
+        await sbDelete(`user_data?device_id=eq.${encodeURIComponent(deviceId)}`);
+        await sbDelete(`users?device_id=eq.${encodeURIComponent(deviceId)}`);
+      }
+      // Закрываем профиль если открыт именно этот пользователь
+      if (currentProfileId === deviceId) {
+        closeUserProfile();
+      }
+      showToast(`User ${displayName} deleted`, 'success');
+      closeModal();
+      loadData();
+    } catch (e) {
+      showToast('Failed to delete user: ' + e.message, 'error');
+      closeModal();
+    }
+  });
+}
+
 function editNote(deviceId) {
   const user = usersData.find(u => u.device_id === deviceId);
   const currentNote = user?.note || '';
@@ -628,6 +661,12 @@ function closeUserProfile() {
 
 function refreshUserProfile() {
   if (currentProfileId) { loadUserProfile(currentProfileId); showToast('Refreshed', 'success'); }
+}
+
+function deleteCurrentUser() {
+  if (!currentProfileId) return;
+  const user = usersData.find(u => u.device_id === currentProfileId);
+  deleteUser(currentProfileId, user?.ip);
 }
 
 function exportUserData() {
@@ -907,6 +946,7 @@ document.addEventListener('click', (e) => {
     case 'edit-note': editNote(deviceId); break;
     case 'block-user': blockUser(ip); break;
     case 'unblock-user': unblockUser(ip); break;
+    case 'delete-user': deleteUser(deviceId, ip); break;
     case 'copy-key':
       navigator.clipboard.writeText(key).then(() => showToast('Key copied!', 'success')).catch(() => showToast('Copy failed', 'error'));
       break;
