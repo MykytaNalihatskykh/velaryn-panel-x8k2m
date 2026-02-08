@@ -184,6 +184,69 @@
     .key-action-btn.secondary { background: #27272a; color: #a1a1aa; }
     .key-action-btn.secondary:hover { background: #3f3f46; color: #fff; }
 
+    /* ===== KEYS LAYOUT ===== */
+    .keys-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; gap: 16px; flex-wrap: wrap;
+    }
+    .keys-toolbar-right { display: flex; gap: 10px; align-items: center; }
+    .keys-filter-tabs { display: flex; gap: 2px; background: #18181b; border-radius: 10px; padding: 4px; border: 1px solid #27272a; }
+    .keys-filter {
+      padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      color: #71717a; cursor: pointer; border: none; background: none; transition: all 0.15s;
+    }
+    .keys-filter:hover { color: #a1a1aa; }
+    .keys-filter.active { background: #7c3aed; color: #fff; }
+    .keys-layout { display: flex; gap: 20px; min-height: 500px; }
+    .keys-user-list {
+      width: 280px; flex-shrink: 0; background: #18181b; border: 1px solid #27272a;
+      border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .keys-user-list-header {
+      padding: 14px 18px; border-bottom: 1px solid #27272a;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .keys-user-list-header h4 { font-size: 14px; font-weight: 600; }
+    .keys-user-list-items { flex: 1; overflow-y: auto; max-height: 500px; }
+    .keys-user-item {
+      display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+      cursor: pointer; transition: background 0.1s; border-bottom: 1px solid rgba(39,39,42,0.5);
+    }
+    .keys-user-item:hover { background: rgba(255,255,255,0.03); }
+    .keys-user-item.active { background: rgba(124,58,237,0.12); border-left: 3px solid #7c3aed; }
+    .keys-user-item .avatar {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .keys-user-item .info { flex: 1; min-width: 0; }
+    .keys-user-item .ip { font-size: 12px; font-family: monospace; font-weight: 600; }
+    .keys-user-item .meta { font-size: 11px; color: #71717a; }
+    .keys-user-item .key-count {
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+      background: rgba(124,58,237,0.15); color: #a78bfa;
+    }
+    .keys-panel { flex: 1; min-width: 0; }
+    .keys-panel-empty {
+      text-align: center; padding: 60px 20px; color: #52525b;
+    }
+    .keys-panel-empty .icon { font-size: 48px; margin-bottom: 12px; }
+    .keys-user-detail-header {
+      background: #18181b; border: 1px solid #27272a; border-radius: 12px;
+      padding: 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 16px;
+    }
+    .keys-user-detail-header .avatar {
+      width: 44px; height: 44px; border-radius: 10px;
+      background: linear-gradient(135deg, #7c3aed, #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; flex-shrink: 0;
+    }
+    .keys-user-detail-header .info { flex: 1; }
+    .keys-user-detail-header .ip { font-size: 16px; font-family: monospace; font-weight: 700; }
+    .keys-user-detail-header .meta { font-size: 12px; color: #71717a; }
+    .keys-user-detail-header .actions { display: flex; gap: 8px; }
+
     /* ===== PROFILE ===== */
     #userProfileSection { display: none; }
     .profile-header {
@@ -355,6 +418,11 @@
       .profile-quick-stats { grid-template-columns: repeat(2, 1fr); }
       .info-grid { grid-template-columns: 1fr; }
       .tracker-extra-sections { grid-template-columns: 1fr; }
+      .keys-layout { flex-direction: column; }
+      .keys-user-list { width: 100%; }
+      .keys-user-list-items { max-height: 200px; }
+      .keys-toolbar { flex-direction: column; align-items: stretch; }
+      .keys-toolbar-right { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -432,25 +500,62 @@
 
       <!-- KEYS SECTION -->
       <section id="keysSection" style="display: none;">
+        <!-- Key stats -->
         <div class="key-stats-row">
           <div class="key-stat"><strong id="keyStat-total">0</strong>Total</div>
           <div class="key-stat"><strong id="keyStat-active">0</strong>Active</div>
           <div class="key-stat"><strong id="keyStat-unused">0</strong>Unused</div>
           <div class="key-stat"><strong id="keyStat-revoked">0</strong>Revoked</div>
         </div>
-        <div class="key-actions" style="margin-bottom: 20px;">
-          <button class="key-action-btn primary" data-action="generate-1">+ Generate 1 Key</button>
-          <button class="key-action-btn secondary" data-action="generate-5">+ Generate 5 Keys</button>
-        </div>
-        <div class="table-card">
-          <div class="table-header">
-            <h3>License Keys</h3>
-            <input type="text" id="keysSearch" class="table-search" placeholder="Search keys...">
+
+        <!-- Filter tabs + global actions -->
+        <div class="keys-toolbar">
+          <div class="keys-filter-tabs">
+            <button class="keys-filter active" data-filter="all">All</button>
+            <button class="keys-filter" data-filter="active">Active</button>
+            <button class="keys-filter" data-filter="unused">Unused</button>
+            <button class="keys-filter" data-filter="revoked">Revoked</button>
+            <button class="keys-filter" data-filter="unassigned">Unassigned</button>
           </div>
-          <table>
-            <thead><tr><th>Key</th><th>Status</th><th>Bound IP</th><th>Device</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody id="keysTableBody"></tbody>
-          </table>
+          <div class="keys-toolbar-right">
+            <input type="text" id="keysSearch" class="table-search" placeholder="Search keys or users...">
+            <button class="key-action-btn primary" data-action="generate-unassigned">+ Unassigned Key</button>
+          </div>
+        </div>
+
+        <!-- Two-panel layout -->
+        <div class="keys-layout">
+          <!-- Left: User list -->
+          <div class="keys-user-list">
+            <div class="keys-user-list-header">
+              <h4>Users</h4>
+            </div>
+            <div class="keys-user-list-items" id="keysUserList">
+              <div class="empty-state small">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Right: Keys panel -->
+          <div class="keys-panel">
+            <div id="keysPanel">
+              <div class="keys-panel-empty">
+                <div class="icon">🔑</div>
+                <div>Select a user to manage their keys, or view all keys above.</div>
+              </div>
+            </div>
+            <!-- All keys table (shown when no user selected or "All" filter) -->
+            <div id="keysAllTable">
+              <div class="table-card">
+                <div class="table-header"><h3>All Keys</h3></div>
+                <div style="max-height:500px;overflow-y:auto;">
+                <table>
+                  <thead><tr><th>Key</th><th>Status</th><th>Owner / Bound</th><th>Device</th><th>Created</th><th>Actions</th></tr></thead>
+                  <tbody id="keysTableBody"></tbody>
+                </table>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -463,6 +568,7 @@
           <div class="profile-avatar" id="profileAvatar">??</div>
           <div class="profile-meta">
             <div class="profile-ip" id="profileIP">-</div>
+            <div style="color:#71717a;font-size:12px;font-family:monospace;" id="profileDeviceId">-</div>
             <div class="profile-note-text" id="profileNote">No note</div>
             <div id="profileStatus" style="margin-top:4px;"></div>
           </div>
@@ -500,6 +606,7 @@
             <div class="info-item"><div class="label">City</div><div class="value" id="infoCity">-</div></div>
             <div class="info-item"><div class="label">First Seen</div><div class="value" id="infoFirstSeen">-</div></div>
             <div class="info-item"><div class="label">Last Activity</div><div class="value" id="infoLastActivity">-</div></div>
+            <div class="info-item"><div class="label">Device ID</div><div class="value" id="infoDeviceId" style="font-family:monospace;font-size:12px;word-break:break-all;">-</div></div>
             <div class="info-item"><div class="label">Extension Version</div><div class="value" id="infoVersion">-</div></div>
           </div>
         </div>
