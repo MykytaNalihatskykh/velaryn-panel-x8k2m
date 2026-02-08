@@ -12,6 +12,7 @@ let userDataCache = {};
 let autoRefreshInterval = null;
 let profileRefreshInterval = null;
 let currentProfileId = null; // device_id of the currently open profile
+let usersFilter = 'all'; // 'all' | 'active' | 'inactive'
 let trackerUsersData = [];
 let trackerNotes = {};
 let trackerNickToId = {};
@@ -154,9 +155,36 @@ function renderUsersTable() {
   const tbody = document.getElementById('usersTableBody');
   const blockedIPs = new Set(blockedData.map(b => b.ip));
   const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+
+  // Считаем количество для каждого фильтра
+  const activeCount = usersData.filter(u => u.license_status === 'activated').length;
+  const inactiveCount = usersData.filter(u => u.license_status !== 'activated').length;
+  const allCount = usersData.length;
+  const elAll = document.getElementById('filterCountAll');
+  const elActive = document.getElementById('filterCountActive');
+  const elInactive = document.getElementById('filterCountInactive');
+  if (elAll) elAll.textContent = allCount;
+  if (elActive) elActive.textContent = activeCount;
+  if (elInactive) elInactive.textContent = inactiveCount;
+
+  // Обновляем заголовок
+  const titleEl = document.getElementById('usersTitle');
+  if (titleEl) {
+    const titles = { all: 'All Users', active: 'Active Users', inactive: 'Inactive Users' };
+    titleEl.textContent = titles[usersFilter] || 'All Users';
+  }
+
+  // Применяем фильтр по лицензии
   let filtered = usersData;
+  if (usersFilter === 'active') {
+    filtered = filtered.filter(u => u.license_status === 'activated');
+  } else if (usersFilter === 'inactive') {
+    filtered = filtered.filter(u => u.license_status !== 'activated');
+  }
+
+  // Применяем текстовый поиск
   if (q) {
-    filtered = usersData.filter(u =>
+    filtered = filtered.filter(u =>
       (u.ip || '').toLowerCase().includes(q) ||
       (u.device_id || '').toLowerCase().includes(q) ||
       (u.country || '').toLowerCase().includes(q) ||
@@ -165,7 +193,10 @@ function renderUsersTable() {
     );
   }
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><div class="icon">👥</div><div>No users found</div></td></tr>';
+    const msg = usersFilter === 'active' ? 'No active (licensed) users found'
+              : usersFilter === 'inactive' ? 'No inactive users found'
+              : 'No users found';
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="icon">👥</div><div>${msg}</div></td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(user => {
@@ -173,12 +204,16 @@ function renderUsersTable() {
     const online = isOnline(user);
     const ini = getInitials(user.ip || user.device_id || '??');
     const did = user.device_id ? user.device_id.substring(0, 8) : '?';
+    const licensed = user.license_status === 'activated';
+    const licenseBadge = licensed
+      ? '<span class="badge licensed" style="background:#065f46;color:#6ee7b7;font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>'
+      : '<span class="badge unlicensed" style="background:#7f1d1d;color:#fca5a5;font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
     return `<tr class="clickable" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
       <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
       <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
       <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
       <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
-      <td>${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}</td>
+      <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
       <td class="time-ago">${fmtDate(user.last_seen)}</td>
       <td>
         <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
@@ -927,6 +962,16 @@ document.addEventListener('click', (e) => {
   filterBtn.classList.add('active');
   if (keysSelectedUserIP) renderKeysForUser(keysSelectedUserIP);
   else renderAllKeysTable();
+});
+
+// Users filter tabs (All / Active / Inactive)
+document.addEventListener('click', (e) => {
+  const filterBtn = e.target.closest('.users-filter-tabs .filter-tab[data-filter]');
+  if (!filterBtn) return;
+  usersFilter = filterBtn.dataset.filter;
+  document.querySelectorAll('.users-filter-tabs .filter-tab').forEach(f => f.classList.remove('active'));
+  filterBtn.classList.add('active');
+  renderUsersTable();
 });
 
 checkAuth();
