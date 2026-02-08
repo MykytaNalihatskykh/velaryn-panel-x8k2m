@@ -11,7 +11,7 @@ let licenseKeysData = [];
 let userDataCache = {};
 let autoRefreshInterval = null;
 let profileRefreshInterval = null;
-let currentProfileIP = null;
+let currentProfileId = null; // device_id of the currently open profile
 let trackerUsersData = [];
 let trackerNotes = {};
 let trackerNickToId = {};
@@ -103,10 +103,10 @@ async function loadData() {
     blockedData = blocked;
     licenseKeysData = keys;
     updateStats();
-    if (currentTab === 'users' && !currentProfileIP) renderUsersTable();
+    if (currentTab === 'users' && !currentProfileId) renderUsersTable();
     if (currentTab === 'blocked') renderBlockedTable();
-    if (currentTab === 'keys') renderKeysTable();
-    if (currentProfileIP) loadUserProfile(currentProfileIP);
+    if (currentTab === 'keys') renderKeysTab();
+    // Не вызываем loadUserProfile здесь -- у профиля свой интервал (profileRefreshInterval)
   } catch (error) {
     console.error('Failed to load data:', error);
   }
@@ -139,7 +139,7 @@ function showTab(tab) {
   const navEl = document.querySelector(`.nav-item[data-tab="${tab}"]`);
   if (navEl) navEl.classList.add('active');
   // Close profile if open
-  if (currentProfileIP) closeUserProfile();
+  if (currentProfileId) closeUserProfile();
   // Show/hide sections
   setDisplay('usersSection', tab === 'users' ? 'block' : 'none');
   setDisplay('blockedSection', tab === 'blocked' ? 'block' : 'none');
@@ -158,6 +158,7 @@ function renderUsersTable() {
   if (q) {
     filtered = usersData.filter(u =>
       (u.ip || '').toLowerCase().includes(q) ||
+      (u.device_id || '').toLowerCase().includes(q) ||
       (u.country || '').toLowerCase().includes(q) ||
       (u.city || '').toLowerCase().includes(q) ||
       (u.note || '').toLowerCase().includes(q)
@@ -170,16 +171,17 @@ function renderUsersTable() {
   tbody.innerHTML = filtered.map(user => {
     const blocked = blockedIPs.has(user.ip);
     const online = isOnline(user);
-    const ini = getInitials(user.ip);
-    return `<tr class="clickable" data-action="open-profile" data-ip="${esc(user.ip)}">
-      <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip)}</div><div class="note">${esc(user.note || 'No note')}</div></div></div></td>
+    const ini = getInitials(user.ip || user.device_id || '??');
+    const did = user.device_id ? user.device_id.substring(0, 8) : '?';
+    return `<tr class="clickable" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
+      <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
       <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
       <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
       <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
       <td>${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}</td>
       <td class="time-ago">${fmtDate(user.last_seen)}</td>
       <td>
-        <button class="action-btn edit" data-action="edit-note" data-ip="${esc(user.ip)}">✏️</button>
+        <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
         ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
       </td>
     </tr>`;
@@ -201,19 +203,12 @@ function renderBlockedTable() {
   </tr>`).join('');
 }
 
-// ===== RENDER: LICENSE KEYS TABLE =====
-function renderKeysTable() {
-  const tbody = document.getElementById('keysTableBody');
-  const q = (document.getElementById('keysSearch')?.value || '').toLowerCase();
-  let filtered = licenseKeysData;
-  if (q) {
-    filtered = licenseKeysData.filter(k =>
-      (k.key || '').toLowerCase().includes(q) ||
-      (k.bound_ip || '').toLowerCase().includes(q) ||
-      (k.note || '').toLowerCase().includes(q)
-    );
-  }
-  // Update key stats
+// ===== KEYS TAB: TWO-LEVEL UI =====
+let keysSelectedUserIP = null;
+let keysFilter = 'all';
+
+function renderKeysTab() {
+  // Update stats
   const active = licenseKeysData.filter(k => k.status === 'active').length;
   const unused = licenseKeysData.filter(k => k.status === 'unused').length;
   const revoked = licenseKeysData.filter(k => k.status === 'revoked').length;
@@ -222,17 +217,187 @@ function renderKeysTable() {
   setText('keyStat-unused', unused);
   setText('keyStat-revoked', revoked);
 
-  if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">🔑</div><div>No license keys yet. Generate one!</div></td></tr>';
+  renderKeysUserList();
+  if (keysSelectedUserIP) {
+    renderKeysForUser(keysSelectedUserIP);
+  } else {
+    renderAllKeysTable();
+  }
+}
+
+function renderKeysUserList() {
+  const c = document.getElementById('keysUserList');
+  if (!c) return;
+
+  // Build map: user IP -> key count
+  const keysByIP = {};
+  licenseKeysData.forEach(k => {
+    const ip = k.owner_ip || k.bound_ip;
+    if (ip) { keysByIP[ip] = (keysByIP[ip] || 0) + 1; }
+  });
+
+  // Get unique users that have at least one key (bound or owner)
+  const userIPs = new Set();
+  licenseKeysData.forEach(k => {
+    if (k.owner_ip) userIPs.add(k.owner_ip);
+    if (k.bound_ip) userIPs.add(k.bound_ip);
+  });
+
+  // Build user list from usersData + any IPs from keys
+  const items = [];
+  const seenIPs = new Set();
+
+  // First add users from the users table that have keys
+  usersData.forEach(u => {
+    if (userIPs.has(u.ip)) {
+      items.push({ ip: u.ip, note: u.note, country: u.country, online: isOnline(u), keyCount: keysByIP[u.ip] || 0 });
+      seenIPs.add(u.ip);
+    }
+  });
+
+  // Then add any IPs that have keys but aren't in the users table
+  userIPs.forEach(ip => {
+    if (!seenIPs.has(ip)) {
+      items.push({ ip, note: null, country: null, online: false, keyCount: keysByIP[ip] || 0 });
+      seenIPs.add(ip);
+    }
+  });
+
+  // Also add users without keys (so admin can generate for them)
+  usersData.forEach(u => {
+    if (!seenIPs.has(u.ip)) {
+      items.push({ ip: u.ip, note: u.note, country: u.country, online: isOnline(u), keyCount: 0 });
+      seenIPs.add(u.ip);
+    }
+  });
+
+  // Sort: users with keys first, then by key count desc, then by IP
+  items.sort((a, b) => b.keyCount - a.keyCount || a.ip.localeCompare(b.ip));
+
+  // Count unassigned keys
+  const unassigned = licenseKeysData.filter(k => !k.owner_ip && !k.bound_ip).length;
+
+  if (!items.length) {
+    c.innerHTML = '<div class="empty-state small">No users</div>';
     return;
   }
-  tbody.innerHTML = filtered.map(k => {
-    const statusClass = k.status === 'active' ? 'key-active' : k.status === 'revoked' ? 'key-revoked' : 'key-unused';
+
+  c.innerHTML = items.map(u => {
+    const isActive = keysSelectedUserIP === u.ip;
+    const ini = getInitials(u.ip);
+    const meta = [u.note, u.country].filter(Boolean).join(' · ') || 'No info';
+    return `<div class="keys-user-item ${isActive ? 'active' : ''}" data-action="select-keys-user" data-ip="${esc(u.ip)}">
+      <div class="avatar">${ini}</div>
+      <div class="info">
+        <div class="ip">${esc(u.ip)}</div>
+        <div class="meta">${esc(meta)}</div>
+      </div>
+      ${u.keyCount > 0 ? `<span class="key-count">${u.keyCount}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function getKeysForUser(ip) {
+  return licenseKeysData.filter(k => k.owner_ip === ip || k.bound_ip === ip);
+}
+
+function renderKeysForUser(ip) {
+  const panel = document.getElementById('keysPanel');
+  const allTable = document.getElementById('keysAllTable');
+  if (allTable) allTable.style.display = 'none';
+
+  const user = usersData.find(u => u.ip === ip);
+  const keys = getKeysForUser(ip);
+  const ini = getInitials(ip);
+  const note = user?.note || 'No note';
+  const country = user?.country || '';
+
+  // Apply filter
+  let filtered = keys;
+  if (keysFilter !== 'all') {
+    filtered = keys.filter(k => k.status === keysFilter);
+  }
+
+  panel.innerHTML = `
+    <div class="keys-user-detail-header">
+      <div class="avatar">${ini}</div>
+      <div class="info">
+        <div class="ip">${esc(ip)}</div>
+        <div class="meta">${esc(note)}${country ? ' · ' + esc(country) : ''} · ${keys.length} key(s)</div>
+      </div>
+      <div class="actions">
+        <button class="key-action-btn primary" data-action="generate-for-user" data-ip="${esc(ip)}">+ Generate Key</button>
+        <button class="key-action-btn secondary" data-action="deselect-keys-user">✕ Close</button>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-header"><h3>Keys for ${esc(ip)}</h3></div>
+      <div style="max-height:400px;overflow-y:auto;">
+      <table>
+        <thead><tr><th>Key</th><th>Status</th><th>Device</th><th>Bound At</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>${!filtered.length
+          ? '<tr><td colspan="6" class="empty-state"><div class="icon">🔑</div><div>No keys for this user yet.</div></td></tr>'
+          : filtered.map(k => renderKeyRow(k)).join('')
+        }</tbody>
+      </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderAllKeysTable() {
+  const panel = document.getElementById('keysPanel');
+  const allTable = document.getElementById('keysAllTable');
+  panel.innerHTML = '<div class="keys-panel-empty"><div class="icon">🔑</div><div>Select a user from the left to manage their keys.</div></div>';
+  if (allTable) allTable.style.display = 'block';
+
+  const tbody = document.getElementById('keysTableBody');
+  if (!tbody) return;
+
+  const q = (document.getElementById('keysSearch')?.value || '').toLowerCase();
+  let filtered = licenseKeysData;
+
+  // Apply status filter
+  if (keysFilter === 'unassigned') {
+    filtered = filtered.filter(k => !k.owner_ip && !k.bound_ip);
+  } else if (keysFilter !== 'all') {
+    filtered = filtered.filter(k => k.status === keysFilter);
+  }
+
+  // Apply search
+  if (q) {
+    filtered = filtered.filter(k =>
+      (k.key || '').toLowerCase().includes(q) ||
+      (k.bound_ip || '').toLowerCase().includes(q) ||
+      (k.owner_ip || '').toLowerCase().includes(q) ||
+      (k.note || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">🔑</div><div>No keys match the current filter.</div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(k => renderKeyRow(k, true)).join('');
+}
+
+function renderKeyRow(k, showOwner = false) {
+  const statusClass = k.status === 'active' ? 'key-active' : k.status === 'revoked' ? 'key-revoked' : 'key-unused';
+  const deviceHtml = k.bound_device_id
+    ? `<span style="color:#71717a;font-size:11px" title="${esc(k.bound_device_id)}">${esc(k.bound_device_id.substring(0, 12))}...</span>`
+    : '<span style="color:#52525b">-</span>';
+
+  if (showOwner) {
+    // All-keys table: Key | Status | Owner/Bound | Device | Created | Actions
+    const ownerHtml = k.owner_ip || k.bound_ip
+      ? `<span style="color:#a78bfa;font-family:monospace;font-size:12px">${esc(k.owner_ip || k.bound_ip)}</span>`
+      : '<span style="color:#52525b">Unassigned</span>';
     return `<tr>
       <td><code class="key-code">${esc(k.key)}</code> <button class="copy-btn" data-action="copy-key" data-key="${esc(k.key)}" title="Copy">📋</button></td>
       <td><span class="key-badge ${statusClass}">${k.status}</span></td>
-      <td>${k.bound_ip ? `<span style="color:#a78bfa;font-family:monospace;font-size:12px">${esc(k.bound_ip)}</span>` : '<span style="color:#52525b">-</span>'}</td>
-      <td>${k.bound_device_id ? `<span style="color:#71717a;font-size:11px">${esc(k.bound_device_id.substring(0, 8))}...</span>` : '<span style="color:#52525b">-</span>'}</td>
+      <td>${ownerHtml}</td>
+      <td>${deviceHtml}</td>
       <td class="time-ago">${fmtDate(k.created_at)}</td>
       <td>
         ${k.status === 'active' ? `<button class="action-btn block" data-action="revoke-key" data-id="${k.id}">Revoke</button>` : ''}
@@ -240,7 +405,31 @@ function renderKeysTable() {
         ${k.status === 'revoked' ? `<button class="action-btn unblock" data-action="reactivate-key" data-id="${k.id}">Reset</button>` : ''}
       </td>
     </tr>`;
-  }).join('');
+  } else {
+    // Per-user table: Key | Status | Device | Bound At | Created | Actions
+    return `<tr>
+      <td><code class="key-code">${esc(k.key)}</code> <button class="copy-btn" data-action="copy-key" data-key="${esc(k.key)}" title="Copy">📋</button></td>
+      <td><span class="key-badge ${statusClass}">${k.status}</span></td>
+      <td>${deviceHtml}</td>
+      <td class="time-ago">${k.bound_at ? fmtDate(k.bound_at) : '-'}</td>
+      <td class="time-ago">${fmtDate(k.created_at)}</td>
+      <td>
+        ${k.status === 'active' ? `<button class="action-btn block" data-action="revoke-key" data-id="${k.id}">Revoke</button>` : ''}
+        ${k.status === 'unused' ? `<button class="action-btn block" data-action="delete-key" data-id="${k.id}">Delete</button>` : ''}
+        ${k.status === 'revoked' ? `<button class="action-btn unblock" data-action="reactivate-key" data-id="${k.id}">Reset</button>` : ''}
+      </td>
+    </tr>`;
+  }
+}
+
+function selectKeysUser(ip) {
+  keysSelectedUserIP = ip;
+  renderKeysTab();
+}
+
+function deselectKeysUser() {
+  keysSelectedUserIP = null;
+  renderKeysTab();
 }
 
 // ===== ACTIONS: USERS =====
@@ -268,16 +457,18 @@ async function unblockUser(ip) {
   } catch (e) { showToast('Failed to unblock', 'error'); }
 }
 
-function editNote(ip) {
-  const user = usersData.find(u => u.ip === ip);
+function editNote(deviceId) {
+  const user = usersData.find(u => u.device_id === deviceId);
   const currentNote = user?.note || '';
+  const ip = user?.ip || 'Unknown';
   openModal('Edit Note', `
     <div class="modal-field"><label>IP Address</label><input type="text" value="${esc(ip)}" disabled></div>
+    <div class="modal-field"><label>Device</label><input type="text" value="${esc(deviceId ? deviceId.substring(0, 12) + '...' : '-')}" disabled></div>
     <div class="modal-field"><label>Note (only visible to you)</label><textarea id="userNote" placeholder="e.g., Friend, Test user">${esc(currentNote)}</textarea></div>
   `, async () => {
     const note = document.getElementById('userNote').value;
     try {
-      await sbPatch(`users?ip=eq.${encodeURIComponent(ip)}`, { note: note || null });
+      await sbPatch(`users?device_id=eq.${encodeURIComponent(deviceId)}`, { note: note || null });
       showToast('Note saved', 'success');
       closeModal();
       loadData();
@@ -292,13 +483,16 @@ function generateKeyString() {
   return `VLR-${seg()}-${seg()}-${seg()}`;
 }
 
-async function generateKey(count = 1) {
+async function generateKey(count = 1, ownerIP = null) {
   try {
     for (let i = 0; i < count; i++) {
       const key = generateKeyString();
-      await sbPost('license_keys', { key, status: 'unused', created_at: new Date().toISOString() });
+      const payload = { key, status: 'unused', created_at: new Date().toISOString() };
+      if (ownerIP) payload.owner_ip = ownerIP;
+      await sbPost('license_keys', payload);
     }
-    showToast(`${count} key(s) generated`, 'success');
+    const label = ownerIP ? `${count} key(s) for ${ownerIP}` : `${count} unassigned key(s)`;
+    showToast(`${label} generated`, 'success');
     loadData();
   } catch (e) { showToast('Failed to generate key', 'error'); console.error(e); }
 }
@@ -330,9 +524,9 @@ async function reactivateKey(id) {
   } catch (e) { showToast('Failed to reset', 'error'); }
 }
 
-// ===== USER PROFILE =====
-async function openUserProfile(ip) {
-  currentProfileIP = ip;
+// ===== USER PROFILE (by device_id) =====
+async function openUserProfile(deviceId) {
+  currentProfileId = deviceId;
   setDisplay('usersSection', 'none');
   setDisplay('blockedSection', 'none');
   setDisplay('keysSection', 'none');
@@ -343,15 +537,18 @@ async function openUserProfile(ip) {
   document.querySelector('.profile-tab')?.classList.add('active');
   document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
   document.getElementById('tabInfo')?.classList.add('active');
-  await loadUserProfile(ip);
+  await loadUserProfile(deviceId);
   if (profileRefreshInterval) clearInterval(profileRefreshInterval);
-  profileRefreshInterval = setInterval(() => loadUserProfile(ip), 10000);
+  profileRefreshInterval = setInterval(() => loadUserProfile(deviceId), 10000);
 }
 
-async function loadUserProfile(ip) {
-  const user = usersData.find(u => u.ip === ip);
+async function loadUserProfile(deviceId) {
+  const user = usersData.find(u => u.device_id === deviceId);
   if (!user) return;
+  const ip = user.ip || 'Unknown';
+  const did = deviceId ? deviceId.substring(0, 12) + '...' : '-';
   setText('profileIP', ip);
+  setText('profileDeviceId', did);
   setText('profileNote', user.note || 'No note');
   setText('profileAvatar', getInitials(ip));
   const online = isOnline(user);
@@ -367,17 +564,18 @@ async function loadUserProfile(ip) {
   setText('infoTimezone', user.timezone || '-');
   setText('infoCountry', user.country || '-');
   setText('infoCity', user.city || '-');
+  setText('infoDeviceId', deviceId || '-');
   setText('infoFirstSeen', fmtDate(user.first_seen));
   setText('infoLastActivity', fmtDate(user.last_activity || user.last_seen));
   setText('infoVersion', user.extension_version || '-');
-  await loadUserDataForProfile(ip);
+  await loadUserDataForProfile(deviceId);
 }
 
-async function loadUserDataForProfile(ip) {
+async function loadUserDataForProfile(deviceId) {
   try {
-    const data = await sbGet(`user_data?ip=eq.${encodeURIComponent(ip)}&select=*`);
+    const data = await sbGet(`user_data?device_id=eq.${encodeURIComponent(deviceId)}&select=*`);
     const ud = data[0] || null;
-    userDataCache[ip] = ud;
+    userDataCache[deviceId] = ud;
     renderInvitesTab(ud);
     renderDatabaseTab(ud);
     renderHistoryTab(ud);
@@ -387,23 +585,23 @@ async function loadUserDataForProfile(ip) {
 }
 
 function closeUserProfile() {
-  currentProfileIP = null;
+  currentProfileId = null;
   if (profileRefreshInterval) { clearInterval(profileRefreshInterval); profileRefreshInterval = null; }
   setDisplay('userProfileSection', 'none');
   showTab(currentTab);
 }
 
 function refreshUserProfile() {
-  if (currentProfileIP) { loadUserProfile(currentProfileIP); showToast('Refreshed', 'success'); }
+  if (currentProfileId) { loadUserProfile(currentProfileId); showToast('Refreshed', 'success'); }
 }
 
 function exportUserData() {
-  const user = usersData.find(u => u.ip === currentProfileIP);
-  const ud = userDataCache[currentProfileIP];
+  const user = usersData.find(u => u.device_id === currentProfileId);
+  const ud = userDataCache[currentProfileId];
   const blob = new Blob([JSON.stringify({ user, userData: ud, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `user_${(currentProfileIP || '').replace(/\./g, '_')}_${Date.now()}.json`;
+  a.download = `user_${(user?.ip || 'unknown').replace(/\./g, '_')}_${Date.now()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
   showToast('Exported', 'success');
@@ -476,7 +674,7 @@ function renderHistoryTab(ud) {
       : '<span style="color:#60a5fa;font-size:11px;margin-right:6px;">Auto</span>';
     // Target display
     const targetHtml = item.target
-      ? `<a href="${esc(targetUrl)}" target="_blank" style="color:#a78bfa;font-weight:500;">${esc(targetLabel)}</a>`
+      ? `<a href="${esc(safeUrl(targetUrl))}" target="_blank" style="color:#a78bfa;font-weight:500;">${esc(targetLabel)}</a>`
       : `<span style="color:#71717a;">${esc(targetLabel)}</span>`;
     return `<div class="history-item"><div class="target">${typeBadge}${targetHtml}${statusBadge}</div><div class="time">${fmtDate(item.timestamp || item.sentAt || item.date)}</div></div>`;
   }).join('');
@@ -546,7 +744,7 @@ function renderTrackerTable() {
     const ac = u.totalSpent >= 500 ? 'whale' : u.totalSpent >= 100 ? 'high' : '';
     const rc = u.rank && u.rank <= 10 ? 'top10' : u.rank && u.rank <= 100 ? 'top100' : '';
     const url = u.userId ? `https://www.manyvids.com/messages/${u.userId}` : `https://www.manyvids.com/Profile/${encodeURIComponent(u.nick)}/`;
-    return `<tr><td><div class="tracker-user"><div class="tracker-user-avatar">${ini}</div><a href="${url}" target="_blank" class="tracker-user-link">${esc(u.nick)}</a></div></td><td><span class="tracker-amount ${ac}">$${u.totalSpent.toFixed(2)}</span></td><td>${u.transactionCount}</td><td>${u.rank ? `<span class="tracker-rank ${rc}">#${u.rank}</span>` : '-'}</td><td class="tracker-date">${u.lastTransaction ? `${fmtDate(u.lastTransaction)} ($${u.lastAmount.toFixed(2)})` : '-'}</td><td><span class="tracker-note" title="${esc(u.note || '')}">${esc(u.note || '-')}</span></td></tr>`;
+    return `<tr><td><div class="tracker-user"><div class="tracker-user-avatar">${ini}</div><a href="${esc(safeUrl(url))}" target="_blank" class="tracker-user-link">${esc(u.nick)}</a></div></td><td><span class="tracker-amount ${ac}">$${u.totalSpent.toFixed(2)}</span></td><td>${u.transactionCount}</td><td>${u.rank ? `<span class="tracker-rank ${rc}">#${u.rank}</span>` : '-'}</td><td class="tracker-date">${u.lastTransaction ? `${fmtDate(u.lastTransaction)} ($${u.lastAmount.toFixed(2)})` : '-'}</td><td><span class="tracker-note" title="${esc(u.note || '')}">${esc(u.note || '-')}</span></td></tr>`;
   }).join('');
 }
 
@@ -559,7 +757,7 @@ function renderTrackerNotes(notes, nickToId) {
     const nick = k.replace(/^(mv_)?note_/, '').replace(/_/g, ' ');
     const uid = nickToId[nick] || nickToId[nick.toLowerCase()] || null;
     const url = uid ? `https://www.manyvids.com/messages/${uid}` : '#';
-    return `<div class="tracker-note-item"><div class="tracker-note-header"><span class="tracker-note-user"><a href="${url}" target="_blank">👤 ${esc(nick)}</a></span></div><div class="tracker-note-text">${esc(v)}</div></div>`;
+    return `<div class="tracker-note-item"><div class="tracker-note-header"><span class="tracker-note-user"><a href="${esc(safeUrl(url))}" target="_blank">👤 ${esc(nick)}</a></span></div><div class="tracker-note-text">${esc(v)}</div></div>`;
   }).join('');
 }
 
@@ -574,7 +772,7 @@ function renderTrackerLastTransactions(tx, nickToId) {
     const uid = t.userId || nickToId[nick] || null;
     const url = uid ? `https://www.manyvids.com/messages/${uid}` : '#';
     const ac = amt >= 500 ? 'whale' : amt >= 100 ? 'high' : '';
-    return `<div class="tracker-tx-item"><div class="tracker-tx-avatar">💰</div><div class="tracker-tx-info"><div class="tracker-tx-user"><a href="${url}" target="_blank">${esc(nick)}</a></div><div class="tracker-tx-details">${esc(t.type || t.item || 'Purchase')} • ${fmtDate(t.timestamp || t.date)}</div></div><div class="tracker-tx-amount ${ac}">$${amt.toFixed(2)}</div></div>`;
+    return `<div class="tracker-tx-item"><div class="tracker-tx-avatar">💰</div><div class="tracker-tx-info"><div class="tracker-tx-user"><a href="${esc(safeUrl(url))}" target="_blank">${esc(nick)}</a></div><div class="tracker-tx-details">${esc(t.type || t.item || 'Purchase')} • ${fmtDate(t.timestamp || t.date)}</div></div><div class="tracker-tx-amount ${ac}">$${amt.toFixed(2)}</div></div>`;
   }).join('');
 }
 
@@ -591,7 +789,7 @@ function renderTrackerLastSent(ud) {
   c.innerHTML = sorted.map(m => {
     const ini = m.nick ? m.nick.slice(0, 2).toUpperCase() : '📤';
     const url = m.id ? `https://www.manyvids.com/messages/${m.id}` : '#';
-    return `<div class="tracker-sent-message"><div class="tracker-sent-header"><div class="tracker-sent-to"><div class="tracker-sent-to-avatar">${ini}</div><div class="tracker-sent-to-name"><a href="${url}" target="_blank">${esc(m.nick)}</a></div></div><span class="tracker-sent-date">${fmtDate(m.ts)}</span></div><div class="tracker-sent-content">${esc(m.msg)}</div></div>`;
+    return `<div class="tracker-sent-message"><div class="tracker-sent-header"><div class="tracker-sent-to"><div class="tracker-sent-to-avatar">${ini}</div><div class="tracker-sent-to-name"><a href="${esc(safeUrl(url))}" target="_blank">${esc(m.nick)}</a></div></div><span class="tracker-sent-date">${fmtDate(m.ts)}</span></div><div class="tracker-sent-content">${esc(m.msg)}</div></div>`;
   }).join('');
 }
 
@@ -622,12 +820,21 @@ function showToast(message, type = 'success') {
 function isOnline(u) {
   return new Date(u.last_activity || u.last_seen).getTime() > Date.now() - 5 * 60 * 1000;
 }
-function getInitials(ip) {
-  const p = ip.split('.'); return p.length >= 2 ? p[0].slice(-1) + p[1].slice(-1) : '??';
+function getInitials(str) {
+  if (!str) return '??';
+  const p = str.split('.');
+  if (p.length >= 2) return p[0].slice(-1) + p[1].slice(-1);
+  // Fallback for device_id (uuid)
+  return str.substring(0, 2).toUpperCase();
 }
 function esc(text) {
   if (text == null) return '';
   const d = document.createElement('div'); d.textContent = String(text); return d.innerHTML;
+}
+function safeUrl(url) {
+  if (!url) return '#';
+  try { const u = new URL(url); if (u.protocol === 'http:' || u.protocol === 'https:') return url; } catch(e) {}
+  return '#';
 }
 function setText(id, val) {
   const el = document.getElementById(id); if (el) el.textContent = val;
@@ -654,14 +861,15 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
   const ip = btn.dataset.ip;
+  const deviceId = btn.dataset.deviceId;
   const id = btn.dataset.id;
   const key = btn.dataset.key;
 
   e.stopPropagation();
 
   switch (action) {
-    case 'open-profile': openUserProfile(ip); break;
-    case 'edit-note': editNote(ip); break;
+    case 'open-profile': openUserProfile(deviceId || ip); break;
+    case 'edit-note': editNote(deviceId); break;
     case 'block-user': blockUser(ip); break;
     case 'unblock-user': unblockUser(ip); break;
     case 'copy-key':
@@ -670,8 +878,10 @@ document.addEventListener('click', (e) => {
     case 'revoke-key': revokeKey(id); break;
     case 'delete-key': deleteKey(id); break;
     case 'reactivate-key': reactivateKey(id); break;
-    case 'generate-1': generateKey(1); break;
-    case 'generate-5': generateKey(5); break;
+    case 'generate-unassigned': generateKey(1, null); break;
+    case 'generate-for-user': generateKey(1, ip); break;
+    case 'select-keys-user': selectKeysUser(ip); break;
+    case 'deselect-keys-user': deselectKeysUser(); break;
   }
 });
 
@@ -679,8 +889,8 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   const row = e.target.closest('tr.clickable');
   if (row && !e.target.closest('[data-action]')) {
-    const ip = row.dataset.ip;
-    if (ip) openUserProfile(ip);
+    const deviceId = row.dataset.deviceId;
+    if (deviceId) openUserProfile(deviceId);
   }
 });
 
@@ -690,8 +900,11 @@ document.getElementById('modalOverlay')?.addEventListener('click', (e) => { if (
 document.getElementById('passwordInput')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 document.getElementById('searchInput')?.addEventListener('input', renderUsersTable);
-document.getElementById('keysSearch')?.addEventListener('input', renderKeysTable);
-document.getElementById('databaseSearch')?.addEventListener('input', () => { if (currentProfileIP && userDataCache[currentProfileIP]) renderDatabaseTab(userDataCache[currentProfileIP]); });
+document.getElementById('keysSearch')?.addEventListener('input', () => {
+  if (keysSelectedUserIP) renderKeysForUser(keysSelectedUserIP);
+  else renderAllKeysTable();
+});
+document.getElementById('databaseSearch')?.addEventListener('input', () => { if (currentProfileId && userDataCache[currentProfileId]) renderDatabaseTab(userDataCache[currentProfileId]); });
 document.getElementById('trackerSearch')?.addEventListener('input', renderTrackerTable);
 document.getElementById('trackerSort')?.addEventListener('change', renderTrackerTable);
 
@@ -703,6 +916,17 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(n => {
 // Profile tabs
 document.querySelectorAll('.profile-tab[data-tab]').forEach(t => {
   t.addEventListener('click', () => showProfileTab(t.dataset.tab));
+});
+
+// Keys filter tabs (delegated since they exist in DOM)
+document.addEventListener('click', (e) => {
+  const filterBtn = e.target.closest('.keys-filter[data-filter]');
+  if (!filterBtn) return;
+  keysFilter = filterBtn.dataset.filter;
+  document.querySelectorAll('.keys-filter').forEach(f => f.classList.remove('active'));
+  filterBtn.classList.add('active');
+  if (keysSelectedUserIP) renderKeysForUser(keysSelectedUserIP);
+  else renderAllKeysTable();
 });
 
 checkAuth();
