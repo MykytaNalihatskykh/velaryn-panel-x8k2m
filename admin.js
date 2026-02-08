@@ -12,7 +12,7 @@ let userDataCache = {};
 let autoRefreshInterval = null;
 let profileRefreshInterval = null;
 let currentProfileId = null; // device_id of the currently open profile
-let usersFilter = 'all'; // 'all' | 'active' | 'inactive'
+let usersFilter = 'active'; // 'all' | 'active' | 'inactive' -- по умолчанию только активные
 let trackerUsersData = [];
 let trackerNotes = {};
 let trackerNickToId = {};
@@ -87,7 +87,7 @@ async function sbPatch(path, data) {
 
 async function sbDelete(path) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: 'DELETE', headers: sbHeaders()
+    method: 'DELETE', headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
   });
   if (!r.ok) throw new Error(`DELETE ${path} failed: ${r.status}`);
 }
