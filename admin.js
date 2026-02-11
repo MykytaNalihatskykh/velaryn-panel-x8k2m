@@ -25,6 +25,8 @@ let usersPage = 1;
 let usersPageSize = 25;
 let usersSelectedIds = new Set();
 let loadAbortController = null;
+let usersViewMode = 'ip'; // 'ip' | 'device' — по умолчанию группировка по IP
+let expandedIPs = new Set();
 
 // ===== THEME =====
 function applyTheme(theme) {
@@ -213,7 +215,11 @@ function updateStats() {
   const totalMessages = usersData.reduce((sum, u) => sum + (u.messages_sent || 0), 0);
   const activeKeys = licenseKeysData.filter(k => k.status === 'active').length;
 
-  setText('totalUsers', usersData.length);
+  // В режиме IP — считаем уникальные IP, иначе устройства
+  const totalCount = usersViewMode === 'ip'
+    ? new Set(usersData.map(u => u.ip || 'no-ip')).size
+    : usersData.length;
+  setText('totalUsers', totalCount);
   setText('onlineUsers', onlineCount);
   setText('blockedUsers', blockedData.length);
   setText('totalMessages', totalMessages);
@@ -272,6 +278,27 @@ function getFilteredAndSortedUsers() {
   return filtered;
 }
 
+// Группировка по IP: { ip, devices, count }. devices сортируются по last_seen desc.
+function getGroupedByIP(filtered) {
+  const groups = new Map();
+  for (const u of filtered) {
+    const ip = u.ip || 'no-ip';
+    if (!groups.has(ip)) groups.set(ip, { ip, devices: [], count: 0 });
+    groups.get(ip).devices.push(u);
+    groups.get(ip).count++;
+  }
+  for (const g of groups.values()) {
+    g.devices.sort((a, b) => new Date(b.last_seen || 0).getTime() - new Date(a.last_seen || 0).getTime());
+  }
+  return Array.from(groups.values());
+}
+
+function toggleIPExpand(ip) {
+  if (expandedIPs.has(ip)) expandedIPs.delete(ip);
+  else expandedIPs.add(ip);
+  renderUsersTable();
+}
+
 function renderUsersTable() {
   const tbody = document.getElementById('usersTableBody');
   const blockedIPs = new Set(blockedData.map(b => b.ip));
@@ -295,54 +322,74 @@ function renderUsersTable() {
   }
 
   const filtered = getFilteredAndSortedUsers();
-  const totalPages = Math.max(1, Math.ceil(filtered.length / usersPageSize));
+  const isIPMode = usersViewMode === 'ip';
+
+  let dataToRender, totalCount, pageDataForSelect;
+  if (isIPMode) {
+    const groups = getGroupedByIP(filtered);
+    totalCount = groups.length;
+    const start = (usersPage - 1) * usersPageSize;
+    const pageGroups = groups.slice(start, start + usersPageSize);
+    pageDataForSelect = pageGroups.flatMap(g => g.devices);
+    const rows = [];
+    for (const grp of pageGroups) {
+      const expanded = expandedIPs.has(grp.ip);
+      const singleDevice = grp.count === 1;
+      const arrow = grp.count > 1 ? (expanded ? '▼' : '▶') : '';
+      const ini = getInitials(grp.ip === 'no-ip' ? '?' : grp.ip);
+      const lastDevice = grp.devices[0];
+      const online = grp.devices.some(u => isOnline(u));
+      const blocked = blockedIPs.has(grp.ip);
+      const licensedCount = grp.devices.filter(u => u.license_status === 'activated').length;
+      const rowAction = singleDevice ? 'open-profile' : 'toggle-ip';
+      const rowData = singleDevice ? `data-device-id="${esc(lastDevice?.device_id || '')}"` : `data-ip="${esc(grp.ip)}"`;
+      rows.push(`<tr class="ip-group-row clickable" data-action="${rowAction}" ${rowData}>
+        <td class="col-check"></td>
+        <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grp.ip === 'no-ip' ? 'No IP' : grp.ip)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${singleDevice ? 'Click to open profile' : arrow + ' Click to expand'}</div></div></div></td>
+        <td><div class="location-cell"><span class="country">${esc(lastDevice?.country || 'Unknown')}</span></div></td>
+        <td><div class="system-cell">—</div></td>
+        <td><div class="stats-cell">—</div></td>
+        <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`} <span class="badge" style="font-size:11px;">${licensedCount}/${grp.count} licensed</span></div></td>
+        <td class="time-ago">${fmtDate(lastDevice?.last_seen)}</td>
+        <td>${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(grp.ip)}">Block</button>`}</td>
+      </tr>`);
+      if (expanded && grp.devices.length > 0) {
+        for (const u of grp.devices) rows.push(renderUserRow(u, true));
+      }
+    }
+    dataToRender = rows.join('');
+    setText('paginationInfo', `Page ${usersPage} of ${Math.max(1, Math.ceil(totalCount / usersPageSize))} (${totalCount} IP groups)`);
+  } else {
+    totalCount = filtered.length;
+    const start = (usersPage - 1) * usersPageSize;
+    pageDataForSelect = filtered.slice(start, start + usersPageSize);
+    dataToRender = pageDataForSelect.map(u => renderUserRow(u)).join('');
+    setText('paginationInfo', `Page ${usersPage} of ${Math.max(1, Math.ceil(totalCount / usersPageSize))} (${totalCount} total)`);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / usersPageSize));
   usersPage = Math.min(usersPage, totalPages);
-  const start = (usersPage - 1) * usersPageSize;
-  const pageData = filtered.slice(start, start + usersPageSize);
 
   document.getElementById('exportUsersBtn').style.display = 'block';
+  document.getElementById('findDuplicatesBtn').style.display = 'block';
   const paginationEl = document.getElementById('usersPagination');
-  paginationEl.style.display = filtered.length > 0 ? 'flex' : 'none';
-  setText('paginationInfo', `Page ${usersPage} of ${totalPages} (${filtered.length} total)`);
+  paginationEl.style.display = totalCount > 0 ? 'flex' : 'none';
   document.getElementById('prevPageBtn').disabled = usersPage <= 1;
   document.getElementById('nextPageBtn').disabled = usersPage >= totalPages;
   const pageSizeSel = document.getElementById('pageSizeSelect');
   if (pageSizeSel) pageSizeSel.value = String(usersPageSize);
 
   const selectAll = document.getElementById('selectAllUsers');
-  if (selectAll) selectAll.checked = pageData.length > 0 && pageData.every(u => usersSelectedIds.has(u.device_id));
+  if (selectAll) selectAll.checked = pageDataForSelect.length > 0 && pageDataForSelect.every(u => usersSelectedIds.has(u.device_id));
 
-  if (filtered.length === 0) {
+  if (totalCount === 0) {
     const msg = usersFilter === 'active' ? 'No active (licensed) users found' : usersFilter === 'inactive' ? 'No inactive users found' : 'No users found';
     tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><div class="icon">👥</div><div>${msg}</div></td></tr>`;
     document.getElementById('usersBulkBar').style.display = 'none';
     return;
   }
 
-  tbody.innerHTML = pageData.map(user => {
-    const blocked = blockedIPs.has(user.ip);
-    const online = isOnline(user);
-    const ini = getInitials(user.ip || user.device_id || '??');
-    const did = user.device_id ? user.device_id.substring(0, 8) : '?';
-    const licensed = user.license_status === 'activated';
-    const licenseBadge = licensed ? '<span class="badge licensed" style="background:var(--success-muted);color:var(--success);font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>' : '<span class="badge unlicensed" style="background:var(--danger-muted);color:var(--danger);font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
-    const checked = usersSelectedIds.has(user.device_id) ? 'checked' : '';
-    const rowClass = usersSelectedIds.has(user.device_id) ? 'clickable selected' : 'clickable';
-    return `<tr class="${rowClass}" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
-      <td class="col-check"><input type="checkbox" class="user-row-check" data-device-id="${esc(user.device_id || '')}" ${checked} onclick="event.stopPropagation()"></td>
-      <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
-      <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
-      <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
-      <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
-      <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
-      <td class="time-ago">${fmtDate(user.last_seen)}</td>
-      <td>
-        <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
-        ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
-        <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:var(--danger);">🗑️</button>
-      </td>
-    </tr>`;
-  }).join('');
+  tbody.innerHTML = dataToRender;
 
   const bulkBar = document.getElementById('usersBulkBar');
   if (usersSelectedIds.size > 0) {
@@ -351,6 +398,33 @@ function renderUsersTable() {
   } else {
     bulkBar.style.display = 'none';
   }
+  return;
+}
+
+function renderUserRow(user, isChild = false) {
+  const blockedIPs = new Set(blockedData.map(b => b.ip));
+  const blocked = blockedIPs.has(user.ip);
+  const online = isOnline(user);
+  const ini = getInitials(user.ip || user.device_id || '??');
+  const did = user.device_id ? user.device_id.substring(0, 8) : '?';
+  const licensed = user.license_status === 'activated';
+  const licenseBadge = licensed ? '<span class="badge licensed" style="background:var(--success-muted);color:var(--success);font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>' : '<span class="badge unlicensed" style="background:var(--danger-muted);color:var(--danger);font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
+  const checked = usersSelectedIds.has(user.device_id) ? 'checked' : '';
+  const rowClass = (usersSelectedIds.has(user.device_id) ? 'clickable selected' : 'clickable') + (isChild ? ' ip-child-row' : '');
+  return `<tr class="${rowClass}" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
+    <td class="col-check"><input type="checkbox" class="user-row-check" data-device-id="${esc(user.device_id || '')}" ${checked} onclick="event.stopPropagation()"></td>
+    <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
+    <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
+    <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
+    <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
+    <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
+    <td class="time-ago">${fmtDate(user.last_seen)}</td>
+    <td>
+      <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
+      ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
+      <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:var(--danger);">🗑️</button>
+    </td>
+  </tr>`;
 }
 
 // ===== RENDER: BLOCKED TABLE =====
@@ -654,7 +728,6 @@ async function deleteUser(deviceId, ip) {
     }
     try {
       if (deviceId) {
-        await sbDelete(`user_data?device_id=eq.${encodeURIComponent(deviceId)}`);
         await sbDelete(`users?device_id=eq.${encodeURIComponent(deviceId)}`);
       }
       if (currentProfileId === deviceId) closeUserProfile();
@@ -707,6 +780,31 @@ function exportUsersCSV() {
   showToast('Exported CSV', 'success');
 }
 
+function showFindDuplicatesModal() {
+  const groups = getGroupedByIP(usersData);
+  const multiIP = groups.filter(g => g.count > 1);
+  if (!multiIP.length) {
+    showToast('No duplicate IP groups found', 'success');
+    return;
+  }
+  let html = '<p style="margin-bottom:12px;">IP groups with multiple devices. Review and delete empty duplicates manually.</p>';
+  html += '<div style="max-height:360px;overflow-y:auto;">';
+  for (const grp of multiIP) {
+    html += `<div class="dup-group" style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;padding:12px;">`;
+    html += `<div style="font-weight:600;margin-bottom:8px;">${esc(grp.ip)} — ${grp.count} devices</div>`;
+    for (const u of grp.devices) {
+      const msgs = u.messages_sent || 0;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);gap:12px;flex-wrap:wrap;">
+        <span>${esc((u.device_id || '').substring(0, 12))}… · ${u.os || '?'} · ${msgs} msgs</span>
+        <button class="action-btn delete" data-action="dup-delete" data-device-id="${esc(u.device_id)}" data-ip="${esc(grp.ip)}" style="color:var(--danger);font-size:11px;">Delete</button>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  openModal('Find Duplicates', html, () => closeModal());
+}
+
 function bulkBlockUsers() {
   const ids = Array.from(usersSelectedIds);
   if (!ids.length) return;
@@ -749,7 +847,6 @@ function bulkDeleteUsers() {
     }
     try {
       for (const did of ids) {
-        await sbDelete(`user_data?device_id=eq.${encodeURIComponent(did)}`);
         await sbDelete(`users?device_id=eq.${encodeURIComponent(did)}`);
       }
       if (currentProfileId && ids.includes(currentProfileId)) closeUserProfile();
@@ -1186,11 +1283,21 @@ document.addEventListener('click', (e) => {
   e.stopPropagation();
 
   switch (action) {
+    case 'toggle-ip': toggleIPExpand(ip); return;
     case 'open-profile': openUserProfile(deviceId || ip); break;
     case 'edit-note': editNote(deviceId); break;
     case 'block-user': blockUser(ip); break;
     case 'unblock-user': unblockUser(ip); break;
     case 'delete-user': deleteUser(deviceId, ip); break;
+    case 'dup-delete':
+      if (confirm(`Delete device ${(deviceId || '').substring(0, 12)}…?`)) {
+        sbDelete(`users?device_id=eq.${encodeURIComponent(deviceId)}`).then(() => {
+          showToast('Deleted', 'success');
+          closeModal();
+          loadData();
+        }).catch(e => showToast('Delete failed', 'error'));
+      }
+      return;
     case 'copy-key':
       navigator.clipboard.writeText(key).then(() => showToast('Key copied!', 'success')).catch(() => showToast('Copy failed', 'error'));
       break;
@@ -1202,6 +1309,7 @@ document.addEventListener('click', (e) => {
     case 'select-keys-user': selectKeysUser(ip); break;
     case 'deselect-keys-user': deselectKeysUser(); break;
     case 'export-users': exportUsersCSV(); break;
+    case 'find-duplicates': showFindDuplicatesModal(); break;
     case 'bulk-block': bulkBlockUsers(); break;
     case 'bulk-delete': bulkDeleteUsers(); break;
     case 'bulk-deselect': bulkDeselectUsers(); break;
@@ -1252,6 +1360,19 @@ document.addEventListener('click', (e) => {
   else renderAllKeysTable();
 });
 
+// Users view toggle (By IP / By Device)
+document.addEventListener('click', (e) => {
+  const viewBtn = e.target.closest('.users-view-toggle .view-toggle-btn[data-view]');
+  if (!viewBtn) return;
+  usersViewMode = viewBtn.dataset.view;
+  document.querySelectorAll('.users-view-toggle .view-toggle-btn').forEach(b => b.classList.remove('active'));
+  viewBtn.classList.add('active');
+  expandedIPs.clear();
+  usersPage = 1;
+  updateStats();
+  renderUsersTable();
+});
+
 // Users filter tabs (All / Active / Inactive)
 document.addEventListener('click', (e) => {
   const filterBtn = e.target.closest('.users-filter-tabs .filter-tab[data-filter]');
@@ -1266,8 +1387,15 @@ document.addEventListener('click', (e) => {
 // Select all users
 document.getElementById('selectAllUsers')?.addEventListener('change', (e) => {
   const filtered = getFilteredAndSortedUsers();
-  const start = (usersPage - 1) * usersPageSize;
-  const pageData = filtered.slice(start, start + usersPageSize);
+  let pageData;
+  if (usersViewMode === 'ip') {
+    const groups = getGroupedByIP(filtered);
+    const start = (usersPage - 1) * usersPageSize;
+    pageData = groups.slice(start, start + usersPageSize).flatMap(g => g.devices);
+  } else {
+    const start = (usersPage - 1) * usersPageSize;
+    pageData = filtered.slice(start, start + usersPageSize);
+  }
   if (e.target.checked) {
     pageData.forEach(u => usersSelectedIds.add(u.device_id));
   } else {
