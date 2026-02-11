@@ -80,6 +80,10 @@
           <div class="table-header">
             <div class="table-header-left">
               <h3 id="usersTitle">All Users</h3>
+              <div class="users-view-toggle" id="usersViewToggle">
+                <button class="view-toggle-btn active" data-view="ip" title="Group by IP">By IP</button>
+                <button class="view-toggle-btn" data-view="device" title="One row per device">By Device</button>
+              </div>
               <div class="users-filter-tabs" id="usersFilterTabs">
                 <button class="filter-tab" data-filter="all">All <span class="filter-count" id="filterCountAll">0</span></button>
                 <button class="filter-tab active" data-filter="active">Active <span class="filter-count" id="filterCountActive">0</span></button>
@@ -87,6 +91,7 @@
               </div>
             </div>
             <div class="table-header-actions">
+              <button class="action-btn secondary" id="findDuplicatesBtn" data-action="find-duplicates" style="display:none;">Find Duplicates</button>
               <button class="action-btn edit" id="exportUsersBtn" data-action="export-users" style="display:none;">Export CSV</button>
               <input type="text" id="searchInput" class="table-search" placeholder="Search by IP, location, note...">
             </div>
