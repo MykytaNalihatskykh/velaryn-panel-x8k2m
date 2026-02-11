@@ -27,26 +27,31 @@ let usersSelectedIds = new Set();
 let loadAbortController = null;
 
 // ===== THEME =====
-function initTheme() {
-  const saved = localStorage.getItem('velaryn_admin_theme') || 'system';
-  const select = document.getElementById('themeSelect');
-  if (select) select.value = saved;
-  applyTheme(saved);
-  select?.addEventListener('change', () => {
-    const v = select.value;
-    localStorage.setItem('velaryn_admin_theme', v);
-    applyTheme(v);
-  });
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if ((localStorage.getItem('velaryn_admin_theme') || 'system') === 'system') applyTheme('system');
-  });
-}
 function applyTheme(theme) {
   let resolved = theme;
   if (theme === 'system') {
     resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
   document.documentElement.setAttribute('data-theme', resolved);
+}
+function initTheme() {
+  const saved = localStorage.getItem('velaryn_admin_theme') || 'system';
+  const setSelectValue = (el, v) => { if (el) el.value = v; };
+  setSelectValue(document.getElementById('themeSelect'), saved);
+  setSelectValue(document.getElementById('themeSelectLogin'), saved);
+  applyTheme(saved);
+  const onThemeChange = (e) => {
+    const v = e.target.value;
+    localStorage.setItem('velaryn_admin_theme', v);
+    setSelectValue(document.getElementById('themeSelect'), v);
+    setSelectValue(document.getElementById('themeSelectLogin'), v);
+    applyTheme(v);
+  };
+  document.getElementById('themeSelect')?.addEventListener('change', onThemeChange);
+  document.getElementById('themeSelectLogin')?.addEventListener('change', onThemeChange);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem('velaryn_admin_theme') || 'system') === 'system') applyTheme('system');
+  });
 }
 
 // ===== AUTH =====
