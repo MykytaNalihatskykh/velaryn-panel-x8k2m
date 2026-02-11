@@ -239,8 +239,11 @@ function showTab(tab) {
   setDisplay('usersSection', tab === 'users' ? 'block' : 'none');
   setDisplay('blockedSection', tab === 'blocked' ? 'block' : 'none');
   setDisplay('keysSection', tab === 'keys' ? 'block' : 'none');
-  const titles = { users: 'Users', blocked: 'Blocked Users', keys: 'License Keys' };
+  const titles = { users: 'Users', blocked: 'Blocked IPs', keys: 'Licenses' };
+  const descs = { users: 'View and manage all registered devices. Group by IP or see individual devices.', blocked: 'IP addresses that are denied access to the extension.', keys: 'Generate and manage license keys for users.' };
   setText('pageTitle', titles[tab] || 'Dashboard');
+  const descEl = document.getElementById('pageDesc');
+  if (descEl) descEl.textContent = descs[tab] || '';
   loadData();
 }
 
@@ -958,10 +961,12 @@ async function openUserProfile(deviceId) {
   setDisplay('keysSection', 'none');
   setDisplay('userProfileSection', 'block');
   setText('pageTitle', 'User Profile');
+  const descEl = document.getElementById('pageDesc');
+  if (descEl) descEl.textContent = 'View detailed info, invites, and tracker data for this user.';
   // Reset tabs
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.profile-tab')?.classList.add('active');
-  document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.profile-tabs .segmented-btn').forEach(t => t.classList.remove('active'));
+  document.querySelector('.profile-tabs .segmented-btn')?.classList.add('active');
+  document.querySelectorAll('.profile-tab-pane').forEach(t => t.classList.remove('active'));
   document.getElementById('tabInfo')?.classList.add('active');
   await loadUserProfile(deviceId);
   if (profileRefreshInterval) clearInterval(profileRefreshInterval);
@@ -1041,9 +1046,9 @@ function exportUserData() {
 
 // ===== PROFILE TAB RENDERERS =====
 function showProfileTab(tabName) {
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.profile-tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.profile-tab[data-tab="${tabName}"]`)?.classList.add('active');
+  document.querySelectorAll('.profile-tabs .segmented-btn').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.profile-tab-pane').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.profile-tabs .segmented-btn[data-tab="${tabName}"]`)?.classList.add('active');
   document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`)?.classList.add('active');
 }
 
@@ -1371,16 +1376,16 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(n => {
 });
 
 // Profile tabs
-document.querySelectorAll('.profile-tab[data-tab]').forEach(t => {
+document.querySelectorAll('.profile-tabs .segmented-btn[data-tab]').forEach(t => {
   t.addEventListener('click', () => showProfileTab(t.dataset.tab));
 });
 
 // Keys filter tabs (delegated since they exist in DOM)
 document.addEventListener('click', (e) => {
-  const filterBtn = e.target.closest('.keys-filter[data-filter]');
+  const filterBtn = e.target.closest('#keysSection .segmented-btn[data-filter]');
   if (!filterBtn) return;
   keysFilter = filterBtn.dataset.filter;
-  document.querySelectorAll('.keys-filter').forEach(f => f.classList.remove('active'));
+  filterBtn.closest('.segmented-control')?.querySelectorAll('.segmented-btn').forEach(f => f.classList.remove('active'));
   filterBtn.classList.add('active');
   if (keysSelectedUserIP) renderKeysForUser(keysSelectedUserIP);
   else renderAllKeysTable();
@@ -1388,10 +1393,10 @@ document.addEventListener('click', (e) => {
 
 // Users view toggle (By IP / By Device)
 document.addEventListener('click', (e) => {
-  const viewBtn = e.target.closest('.users-view-toggle .view-toggle-btn[data-view]');
+  const viewBtn = e.target.closest('#usersViewToggle .segmented-btn[data-view]');
   if (!viewBtn) return;
   usersViewMode = viewBtn.dataset.view;
-  document.querySelectorAll('.users-view-toggle .view-toggle-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#usersViewToggle .segmented-btn').forEach(b => b.classList.remove('active'));
   viewBtn.classList.add('active');
   expandedIPs.clear();
   usersPage = 1;
@@ -1401,10 +1406,10 @@ document.addEventListener('click', (e) => {
 
 // Users filter tabs (All / Active / Inactive)
 document.addEventListener('click', (e) => {
-  const filterBtn = e.target.closest('.users-filter-tabs .filter-tab[data-filter]');
+  const filterBtn = e.target.closest('#usersFilterTabs .segmented-btn[data-filter]');
   if (!filterBtn) return;
   usersFilter = filterBtn.dataset.filter;
-  document.querySelectorAll('.users-filter-tabs .filter-tab').forEach(f => f.classList.remove('active'));
+  document.querySelectorAll('#usersFilterTabs .segmented-btn').forEach(f => f.classList.remove('active'));
   filterBtn.classList.add('active');
   usersPage = 1;
   renderUsersTable();
@@ -1466,7 +1471,7 @@ document.addEventListener('click', (e) => {
 document.getElementById('sidebarToggle')?.addEventListener('click', () => {
   document.querySelector('.sidebar')?.classList.toggle('open');
 });
-document.querySelector('.main-content')?.addEventListener('click', (e) => {
+document.querySelector('.main')?.addEventListener('click', (e) => {
   if (window.innerWidth <= 600 && document.querySelector('.sidebar.open') && !e.target.closest('.sidebar')) {
     document.querySelector('.sidebar')?.classList.remove('open');
   }
