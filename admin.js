@@ -1,7 +1,9 @@
-// ===== VELARYN ADMIN PANEL v2 =====
+// ===== VELARYN ADMIN PANEL v3 =====
 const SUPABASE_URL = 'https://kklwsrrlynmpsyispbyn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtrbHdzcnJseW5tcHN5aXNwYnluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNDU5NDEsImV4cCI6MjA4NTkyMTk0MX0.rA62ShgmXMvGyDl5cxEd4s-rIBEV1Spn0HX8YF_Qjrc';
 const ADMIN_PASSWORD = 'velaryn2024';
+const LOGIN_ATTEMPTS_MAX = 5;
+const LOGIN_COOLDOWN_MS = 60000;
 
 // State
 let currentTab = 'users';
@@ -11,25 +13,78 @@ let licenseKeysData = [];
 let userDataCache = {};
 let autoRefreshInterval = null;
 let profileRefreshInterval = null;
-let currentProfileId = null; // device_id of the currently open profile
-let usersFilter = 'active'; // 'all' | 'active' | 'inactive' -- по умолчанию только активные
+let currentProfileId = null;
+let usersFilter = 'active';
 let trackerUsersData = [];
 let trackerNotes = {};
 let trackerNickToId = {};
 let trackerTransactions = [];
+let usersSortBy = 'last_seen';
+let usersSortDesc = true;
+let usersPage = 1;
+let usersPageSize = 25;
+let usersSelectedIds = new Set();
+let loadAbortController = null;
+
+// ===== THEME =====
+function initTheme() {
+  const saved = localStorage.getItem('velaryn_admin_theme') || 'system';
+  const select = document.getElementById('themeSelect');
+  if (select) select.value = saved;
+  applyTheme(saved);
+  select?.addEventListener('change', () => {
+    const v = select.value;
+    localStorage.setItem('velaryn_admin_theme', v);
+    applyTheme(v);
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem('velaryn_admin_theme') || 'system') === 'system') applyTheme('system');
+  });
+}
+function applyTheme(theme) {
+  let resolved = theme;
+  if (theme === 'system') {
+    resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', resolved);
+}
 
 // ===== AUTH =====
+let loginAttempts = 0;
+let loginLockedUntil = 0;
 function login() {
-  const pw = document.getElementById('passwordInput').value;
+  const pwInput = document.getElementById('passwordInput');
+  const pw = pwInput?.value?.trim() || '';
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const now = Date.now();
+  if (now < loginLockedUntil) {
+    const remaining = Math.ceil((loginLockedUntil - now) / 1000);
+    showToast(`Too many attempts. Try again in ${remaining}s`, 'error');
+    return;
+  }
+  if (!pw) {
+    if (loginError) { loginError.textContent = 'Enter password'; loginError.style.display = 'block'; }
+    return;
+  }
+  if (loginError) loginError.style.display = 'none';
+  loginBtn.disabled = true;
   if (pw === ADMIN_PASSWORD) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboard').classList.add('active');
     localStorage.setItem('velaryn_admin_auth', 'true');
     loadData();
     startAutoRefresh();
+    loginAttempts = 0;
   } else {
+    loginAttempts++;
     showToast('Invalid password', 'error');
+    if (loginAttempts >= LOGIN_ATTEMPTS_MAX) {
+      loginLockedUntil = now + LOGIN_COOLDOWN_MS;
+      showToast(`Locked for ${LOGIN_COOLDOWN_MS / 1000}s after ${LOGIN_ATTEMPTS_MAX} failed attempts`, 'error');
+    }
   }
+  loginBtn.disabled = false;
 }
 
 function logout() {
@@ -92,14 +147,40 @@ async function sbDelete(path) {
   if (!r.ok) throw new Error(`DELETE ${path} failed: ${r.status}`);
 }
 
+async function loadWithRetry(fn, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
+function showErrorBoundary(msg) {
+  const el = document.getElementById('errorBoundary');
+  const msgEl = document.getElementById('errorBoundaryMsg');
+  if (el && msgEl) {
+    msgEl.textContent = msg || 'An unexpected error occurred.';
+    el.style.display = 'flex';
+  }
+}
+
 // ===== DATA LOADING =====
 async function loadData() {
+  if (loadAbortController) loadAbortController.abort();
+  loadAbortController = new AbortController();
+  const signal = loadAbortController.signal;
   try {
-    const [users, blocked, keys] = await Promise.all([
-      sbGet('users?select=*&order=last_seen.desc'),
-      sbGet('blocked_ips?select=*&order=blocked_at.desc'),
-      sbGet('license_keys?select=*&order=created_at.desc')
-    ]);
+    const [users, blocked, keys] = await loadWithRetry(async () => {
+      const [u, b, k] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/users?select=*&order=last_seen.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))),
+        fetch(`${SUPABASE_URL}/rest/v1/blocked_ips?select=*&order=blocked_at.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))),
+        fetch(`${SUPABASE_URL}/rest/v1/license_keys?select=*&order=created_at.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
+      ]);
+      return [u, b, k];
+    });
     usersData = users;
     blockedData = blocked;
     licenseKeysData = keys;
@@ -107,9 +188,11 @@ async function loadData() {
     if (currentTab === 'users' && !currentProfileId) renderUsersTable();
     if (currentTab === 'blocked') renderBlockedTable();
     if (currentTab === 'keys') renderKeysTab();
-    // Не вызываем loadUserProfile здесь -- у профиля свой интервал (profileRefreshInterval)
   } catch (error) {
+    if (error.name === 'AbortError') return;
     console.error('Failed to load data:', error);
+    showToast('Failed to load data. Retrying...', 'error');
+    setTimeout(loadData, 3000);
   }
 }
 
@@ -151,38 +234,11 @@ function showTab(tab) {
 }
 
 // ===== RENDER: USERS TABLE =====
-function renderUsersTable() {
-  const tbody = document.getElementById('usersTableBody');
-  const blockedIPs = new Set(blockedData.map(b => b.ip));
+function getFilteredAndSortedUsers() {
   const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-
-  // Считаем количество для каждого фильтра
-  const activeCount = usersData.filter(u => u.license_status === 'activated').length;
-  const inactiveCount = usersData.filter(u => u.license_status !== 'activated').length;
-  const allCount = usersData.length;
-  const elAll = document.getElementById('filterCountAll');
-  const elActive = document.getElementById('filterCountActive');
-  const elInactive = document.getElementById('filterCountInactive');
-  if (elAll) elAll.textContent = allCount;
-  if (elActive) elActive.textContent = activeCount;
-  if (elInactive) elInactive.textContent = inactiveCount;
-
-  // Обновляем заголовок
-  const titleEl = document.getElementById('usersTitle');
-  if (titleEl) {
-    const titles = { all: 'All Users', active: 'Active Users', inactive: 'Inactive Users' };
-    titleEl.textContent = titles[usersFilter] || 'All Users';
-  }
-
-  // Применяем фильтр по лицензии
   let filtered = usersData;
-  if (usersFilter === 'active') {
-    filtered = filtered.filter(u => u.license_status === 'activated');
-  } else if (usersFilter === 'inactive') {
-    filtered = filtered.filter(u => u.license_status !== 'activated');
-  }
-
-  // Применяем текстовый поиск
+  if (usersFilter === 'active') filtered = filtered.filter(u => u.license_status === 'activated');
+  else if (usersFilter === 'inactive') filtered = filtered.filter(u => u.license_status !== 'activated');
   if (q) {
     filtered = filtered.filter(u =>
       (u.ip || '').toLowerCase().includes(q) ||
@@ -192,23 +248,83 @@ function renderUsersTable() {
       (u.note || '').toLowerCase().includes(q)
     );
   }
+  const cmp = (a, b) => {
+    let va = a, vb = b;
+    if (usersSortBy === 'last_seen' || usersSortBy === 'messages') {
+      va = Number(va) || 0; vb = Number(vb) || 0;
+    }
+    if (va < vb) return usersSortDesc ? 1 : -1;
+    if (va > vb) return usersSortDesc ? -1 : 1;
+    return 0;
+  };
+  const getVal = u => {
+    if (usersSortBy === 'ip') return (u.ip || '').toLowerCase();
+    if (usersSortBy === 'country') return (u.country || '').toLowerCase();
+    if (usersSortBy === 'messages') return u.messages_sent || 0;
+    return new Date(u.last_seen || 0).getTime();
+  };
+  filtered = [...filtered].sort((a, b) => cmp(getVal(a), getVal(b)));
+  return filtered;
+}
+
+function renderUsersTable() {
+  const tbody = document.getElementById('usersTableBody');
+  const blockedIPs = new Set(blockedData.map(b => b.ip));
+
+  document.querySelectorAll('th.sortable').forEach(h => {
+    h.classList.remove('sort-asc', 'sort-desc');
+    if (h.dataset.sort === usersSortBy) h.classList.add(usersSortDesc ? 'sort-desc' : 'sort-asc');
+  });
+
+  const activeCount = usersData.filter(u => u.license_status === 'activated').length;
+  const inactiveCount = usersData.filter(u => u.license_status !== 'activated').length;
+  const allCount = usersData.length;
+  setText('filterCountAll', allCount);
+  setText('filterCountActive', activeCount);
+  setText('filterCountInactive', inactiveCount);
+
+  const titleEl = document.getElementById('usersTitle');
+  if (titleEl) {
+    const titles = { all: 'All Users', active: 'Active Users', inactive: 'Inactive Users' };
+    titleEl.textContent = titles[usersFilter] || 'All Users';
+  }
+
+  const filtered = getFilteredAndSortedUsers();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / usersPageSize));
+  usersPage = Math.min(usersPage, totalPages);
+  const start = (usersPage - 1) * usersPageSize;
+  const pageData = filtered.slice(start, start + usersPageSize);
+
+  document.getElementById('exportUsersBtn').style.display = 'block';
+  const paginationEl = document.getElementById('usersPagination');
+  paginationEl.style.display = filtered.length > 0 ? 'flex' : 'none';
+  setText('paginationInfo', `Page ${usersPage} of ${totalPages} (${filtered.length} total)`);
+  document.getElementById('prevPageBtn').disabled = usersPage <= 1;
+  document.getElementById('nextPageBtn').disabled = usersPage >= totalPages;
+  const pageSizeSel = document.getElementById('pageSizeSelect');
+  if (pageSizeSel) pageSizeSel.value = String(usersPageSize);
+
+  const selectAll = document.getElementById('selectAllUsers');
+  if (selectAll) selectAll.checked = pageData.length > 0 && pageData.every(u => usersSelectedIds.has(u.device_id));
+
   if (filtered.length === 0) {
-    const msg = usersFilter === 'active' ? 'No active (licensed) users found'
-              : usersFilter === 'inactive' ? 'No inactive users found'
-              : 'No users found';
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="icon">👥</div><div>${msg}</div></td></tr>`;
+    const msg = usersFilter === 'active' ? 'No active (licensed) users found' : usersFilter === 'inactive' ? 'No inactive users found' : 'No users found';
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><div class="icon">👥</div><div>${msg}</div></td></tr>`;
+    document.getElementById('usersBulkBar').style.display = 'none';
     return;
   }
-  tbody.innerHTML = filtered.map(user => {
+
+  tbody.innerHTML = pageData.map(user => {
     const blocked = blockedIPs.has(user.ip);
     const online = isOnline(user);
     const ini = getInitials(user.ip || user.device_id || '??');
     const did = user.device_id ? user.device_id.substring(0, 8) : '?';
     const licensed = user.license_status === 'activated';
-    const licenseBadge = licensed
-      ? '<span class="badge licensed" style="background:#065f46;color:#6ee7b7;font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>'
-      : '<span class="badge unlicensed" style="background:#7f1d1d;color:#fca5a5;font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
-    return `<tr class="clickable" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
+    const licenseBadge = licensed ? '<span class="badge licensed" style="background:var(--success-muted);color:var(--success);font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>' : '<span class="badge unlicensed" style="background:var(--danger-muted);color:var(--danger);font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
+    const checked = usersSelectedIds.has(user.device_id) ? 'checked' : '';
+    const rowClass = usersSelectedIds.has(user.device_id) ? 'clickable selected' : 'clickable';
+    return `<tr class="${rowClass}" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
+      <td class="col-check"><input type="checkbox" class="user-row-check" data-device-id="${esc(user.device_id || '')}" ${checked} onclick="event.stopPropagation()"></td>
       <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
       <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
       <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
@@ -218,10 +334,18 @@ function renderUsersTable() {
       <td>
         <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
         ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
-        <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:#ef4444;">🗑️</button>
+        <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:var(--danger);">🗑️</button>
       </td>
     </tr>`;
   }).join('');
+
+  const bulkBar = document.getElementById('usersBulkBar');
+  if (usersSelectedIds.size > 0) {
+    bulkBar.style.display = 'flex';
+    setText('bulkSelectedCount', `${usersSelectedIds.size} selected`);
+  } else {
+    bulkBar.style.display = 'none';
+  }
 }
 
 // ===== RENDER: BLOCKED TABLE =====
@@ -232,7 +356,7 @@ function renderBlockedTable() {
     return;
   }
   tbody.innerHTML = blockedData.map(b => `<tr>
-    <td><span style="color:#a78bfa;font-family:monospace">${esc(b.ip)}</span></td>
+    <td><span style="color:var(--primary);font-family:monospace">${esc(b.ip)}</span></td>
     <td>${esc(b.reason || '-')}</td>
     <td class="time-ago">${fmtDate(b.blocked_at)}</td>
     <td><button class="action-btn unblock" data-action="unblock-user" data-ip="${esc(b.ip)}">Unblock</button></td>
@@ -421,14 +545,13 @@ function renderAllKeysTable() {
 function renderKeyRow(k, showOwner = false) {
   const statusClass = k.status === 'active' ? 'key-active' : k.status === 'revoked' ? 'key-revoked' : 'key-unused';
   const deviceHtml = k.bound_device_id
-    ? `<span style="color:#71717a;font-size:11px" title="${esc(k.bound_device_id)}">${esc(k.bound_device_id.substring(0, 12))}...</span>`
-    : '<span style="color:#52525b">-</span>';
+    ? `<span style="color:var(--text-muted);font-size:11px" title="${esc(k.bound_device_id)}">${esc(k.bound_device_id.substring(0, 12))}...</span>`
+    : '<span style="color:var(--text-dim)">-</span>';
 
   if (showOwner) {
-    // All-keys table: Key | Status | Owner/Bound | Device | Created | Actions
     const ownerHtml = k.owner_ip || k.bound_ip
-      ? `<span style="color:#a78bfa;font-family:monospace;font-size:12px">${esc(k.owner_ip || k.bound_ip)}</span>`
-      : '<span style="color:#52525b">Unassigned</span>';
+      ? `<span style="color:var(--primary);font-family:monospace;font-size:12px">${esc(k.owner_ip || k.bound_ip)}</span>`
+      : '<span style="color:var(--text-dim)">Unassigned</span>';
     return `<tr>
       <td><code class="key-code">${esc(k.key)}</code> <button class="copy-btn" data-action="copy-key" data-key="${esc(k.key)}" title="Copy">📋</button></td>
       <td><span class="key-badge ${statusClass}">${k.status}</span></td>
@@ -468,13 +591,24 @@ function deselectKeysUser() {
   renderKeysTab();
 }
 
+function isValidIP(ip) {
+  if (!ip || typeof ip !== 'string') return false;
+  const parts = ip.trim().split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => /^\d+$/.test(p) && parseInt(p, 10) >= 0 && parseInt(p, 10) <= 255);
+}
+
 // ===== ACTIONS: USERS =====
 async function blockUser(ip) {
+  if (!isValidIP(ip)) {
+    showToast('Invalid IP address', 'error');
+    return;
+  }
   openModal('Block User', `
     <div class="modal-field"><label>IP Address</label><input type="text" value="${esc(ip)}" disabled></div>
-    <div class="modal-field"><label>Reason (shown to user)</label><textarea id="blockReason" placeholder="e.g., Violation of terms"></textarea></div>
+    <div class="modal-field"><label>Reason (optional, shown to user)</label><textarea id="blockReason" placeholder="e.g., Violation of terms"></textarea></div>
   `, async () => {
-    const reason = document.getElementById('blockReason').value;
+    const reason = (document.getElementById('blockReason').value || '').trim();
     try {
       await sbPost('blocked_ips', { ip, reason: reason || null, blocked_at: new Date().toISOString() });
       showToast(`User ${ip} blocked`, 'success');
@@ -499,22 +633,26 @@ async function deleteUser(deviceId, ip) {
   openModal('Delete User', `
     <div style="text-align:center;padding:10px 0;">
       <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
-      <p style="color:#fafafa;font-size:15px;margin-bottom:8px;">Удалить пользователя <strong>${esc(displayName)}</strong>?</p>
-      <p style="color:#a1a1aa;font-size:13px;">IP: ${esc(ip || 'N/A')}</p>
-      <p style="color:#a1a1aa;font-size:13px;">Device: ${esc(deviceId ? deviceId.substring(0, 16) + '...' : 'N/A')}</p>
-      <p style="color:#ef4444;font-size:12px;margin-top:12px;">Это удалит все данные пользователя (users + user_data). Действие необратимо.</p>
+      <p style="font-size:15px;margin-bottom:8px;">Delete user <strong>${esc(displayName)}</strong>?</p>
+      <p style="color:var(--text-muted);font-size:13px;">IP: ${esc(ip || 'N/A')}</p>
+      <p style="color:var(--text-muted);font-size:13px;">Device: ${esc(deviceId ? deviceId.substring(0, 16) + '...' : 'N/A')}</p>
+      <p style="color:var(--danger);font-size:12px;margin-top:12px;">This will permanently delete all user data (users + user_data). This action cannot be undone.</p>
+      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+        <input type="checkbox" id="deleteConfirmCheck">
+        <label for="deleteConfirmCheck">I understand, delete permanently</label>
+      </div>
     </div>
   `, async () => {
+    if (!document.getElementById('deleteConfirmCheck').checked) {
+      showToast('Please confirm by checking the box', 'warning');
+      return;
+    }
     try {
-      // Удаляем из users и user_data по device_id
       if (deviceId) {
         await sbDelete(`user_data?device_id=eq.${encodeURIComponent(deviceId)}`);
         await sbDelete(`users?device_id=eq.${encodeURIComponent(deviceId)}`);
       }
-      // Закрываем профиль если открыт именно этот пользователь
-      if (currentProfileId === deviceId) {
-        closeUserProfile();
-      }
+      if (currentProfileId === deviceId) closeUserProfile();
       showToast(`User ${displayName} deleted`, 'success');
       closeModal();
       loadData();
@@ -534,7 +672,7 @@ function editNote(deviceId) {
     <div class="modal-field"><label>Device</label><input type="text" value="${esc(deviceId ? deviceId.substring(0, 12) + '...' : '-')}" disabled></div>
     <div class="modal-field"><label>Note (only visible to you)</label><textarea id="userNote" placeholder="e.g., Friend, Test user">${esc(currentNote)}</textarea></div>
   `, async () => {
-    const note = document.getElementById('userNote').value;
+    const note = (document.getElementById('userNote').value || '').trim();
     try {
       await sbPatch(`users?device_id=eq.${encodeURIComponent(deviceId)}`, { note: note || null });
       showToast('Note saved', 'success');
@@ -542,6 +680,85 @@ function editNote(deviceId) {
       loadData();
     } catch (e) { showToast('Failed to save note', 'error'); }
   });
+}
+
+function exportUsersCSV() {
+  const filtered = getFilteredAndSortedUsers();
+  if (!filtered.length) { showToast('No users to export', 'warning'); return; }
+  const headers = ['IP', 'Device ID', 'Country', 'City', 'OS', 'Browser', 'Messages', 'Sessions', 'Last Seen', 'License', 'Note'];
+  const rows = filtered.map(u => [
+    u.ip || '', (u.device_id || '').substring(0, 16),
+    u.country || '', u.city || '', u.os || '', (u.browser || '') + ' ' + (u.browser_version || ''),
+    u.messages_sent || 0, u.sessions_count || 1, u.last_seen || '',
+    u.license_status === 'activated' ? 'yes' : 'no', (u.note || '').replace(/"/g, '""')
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c)}"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `velaryn_users_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('Exported CSV', 'success');
+}
+
+function bulkBlockUsers() {
+  const ids = Array.from(usersSelectedIds);
+  if (!ids.length) return;
+  const users = ids.map(did => usersData.find(u => u.device_id === did)).filter(Boolean);
+  const ips = users.map(u => u.ip).filter(ip => ip && isValidIP(ip));
+  if (!ips.length) { showToast('No valid IPs to block', 'error'); return; }
+  openModal('Block Selected Users', `
+    <p style="margin-bottom:12px;">Block ${ips.length} user(s)?</p>
+    <div class="modal-field"><label>Reason (optional)</label><textarea id="bulkBlockReason" placeholder="e.g., Violation of terms"></textarea></div>
+  `, async () => {
+    const reason = (document.getElementById('bulkBlockReason').value || '').trim();
+    try {
+      for (const ip of ips) {
+        await sbPost('blocked_ips', { ip, reason: reason || null, blocked_at: new Date().toISOString() });
+      }
+      showToast(`${ips.length} user(s) blocked`, 'success');
+      closeModal();
+      usersSelectedIds.clear();
+      loadData();
+    } catch (e) { showToast('Failed to block', 'error'); }
+  });
+}
+
+function bulkDeleteUsers() {
+  const ids = Array.from(usersSelectedIds);
+  if (!ids.length) return;
+  openModal('Delete Selected Users', `
+    <div style="text-align:center;padding:10px 0;">
+      <p style="font-size:15px;margin-bottom:8px;">Permanently delete <strong>${ids.length}</strong> user(s)?</p>
+      <p style="color:var(--danger);font-size:12px;margin-top:12px;">This cannot be undone. All user data will be lost.</p>
+      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+        <input type="checkbox" id="bulkDeleteConfirmCheck">
+        <label for="bulkDeleteConfirmCheck">I understand, delete permanently</label>
+      </div>
+    </div>
+  `, async () => {
+    if (!document.getElementById('bulkDeleteConfirmCheck').checked) {
+      showToast('Please confirm', 'warning');
+      return;
+    }
+    try {
+      for (const did of ids) {
+        await sbDelete(`user_data?device_id=eq.${encodeURIComponent(did)}`);
+        await sbDelete(`users?device_id=eq.${encodeURIComponent(did)}`);
+      }
+      if (currentProfileId && ids.includes(currentProfileId)) closeUserProfile();
+      showToast(`${ids.length} user(s) deleted`, 'success');
+      closeModal();
+      usersSelectedIds.clear();
+      loadData();
+    } catch (e) { showToast('Failed to delete: ' + e.message, 'error'); }
+  });
+}
+
+function bulkDeselectUsers() {
+  usersSelectedIds.clear();
+  renderUsersTable();
 }
 
 // ===== ACTIONS: LICENSE KEYS =====
@@ -575,12 +792,26 @@ async function revokeKey(id) {
 }
 
 async function deleteKey(id) {
-  if (!confirm('Delete this unused key?')) return;
-  try {
-    await sbDelete(`license_keys?id=eq.${id}`);
-    showToast('Key deleted', 'success');
-    loadData();
-  } catch (e) { showToast('Failed to delete', 'error'); }
+  openModal('Delete Key', `
+    <div style="text-align:center;padding:10px 0;">
+      <p style="font-size:15px;margin-bottom:12px;">Delete this unused key? This cannot be undone.</p>
+      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+        <input type="checkbox" id="deleteKeyConfirmCheck">
+        <label for="deleteKeyConfirmCheck">I understand</label>
+      </div>
+    </div>
+  `, async () => {
+    if (!document.getElementById('deleteKeyConfirmCheck')?.checked) {
+      showToast('Please confirm', 'warning');
+      return;
+    }
+    try {
+      await sbDelete(`license_keys?id=eq.${id}`);
+      showToast('Key deleted', 'success');
+      closeModal();
+      loadData();
+    } catch (e) { showToast('Failed to delete', 'error'); }
+  });
 }
 
 async function reactivateKey(id) {
@@ -869,15 +1100,23 @@ function renderTrackerLastSent(ud) {
 
 // ===== MODAL =====
 let modalCallback = null;
-function openModal(title, content, onConfirm) {
+let lastModalTrigger = null;
+function openModal(title, content, onConfirm, triggerEl) {
+  lastModalTrigger = triggerEl || document.activeElement;
   setText('modalTitle', title);
   document.getElementById('modalContent').innerHTML = content;
   document.getElementById('modalOverlay').classList.add('active');
   modalCallback = onConfirm;
+  requestAnimationFrame(() => {
+    const first = document.querySelector('#modalContent input:not([disabled]), #modalContent textarea, #modalContent select');
+    if (first) first.focus();
+  });
 }
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
   modalCallback = null;
+  if (lastModalTrigger && typeof lastModalTrigger.focus === 'function') lastModalTrigger.focus();
+  lastModalTrigger = null;
 }
 
 // ===== TOAST =====
@@ -957,13 +1196,17 @@ document.addEventListener('click', (e) => {
     case 'generate-for-user': generateKey(1, ip); break;
     case 'select-keys-user': selectKeysUser(ip); break;
     case 'deselect-keys-user': deselectKeysUser(); break;
+    case 'export-users': exportUsersCSV(); break;
+    case 'bulk-block': bulkBlockUsers(); break;
+    case 'bulk-delete': bulkDeleteUsers(); break;
+    case 'bulk-deselect': bulkDeselectUsers(); break;
   }
 });
 
-// Click on table rows
+// Click on table rows (exclude checkbox and action buttons)
 document.addEventListener('click', (e) => {
   const row = e.target.closest('tr.clickable');
-  if (row && !e.target.closest('[data-action]')) {
+  if (row && !e.target.closest('[data-action]') && !e.target.closest('.user-row-check, .col-check')) {
     const deviceId = row.dataset.deviceId;
     if (deviceId) openUserProfile(deviceId);
   }
@@ -1011,7 +1254,64 @@ document.addEventListener('click', (e) => {
   usersFilter = filterBtn.dataset.filter;
   document.querySelectorAll('.users-filter-tabs .filter-tab').forEach(f => f.classList.remove('active'));
   filterBtn.classList.add('active');
+  usersPage = 1;
   renderUsersTable();
 });
 
+// Select all users
+document.getElementById('selectAllUsers')?.addEventListener('change', (e) => {
+  const filtered = getFilteredAndSortedUsers();
+  const start = (usersPage - 1) * usersPageSize;
+  const pageData = filtered.slice(start, start + usersPageSize);
+  if (e.target.checked) {
+    pageData.forEach(u => usersSelectedIds.add(u.device_id));
+  } else {
+    pageData.forEach(u => usersSelectedIds.delete(u.device_id));
+  }
+  renderUsersTable();
+});
+
+// Row checkbox (delegated)
+document.addEventListener('change', (e) => {
+  if (!e.target.classList.contains('user-row-check')) return;
+  const did = e.target.dataset.deviceId;
+  if (e.target.checked) usersSelectedIds.add(did);
+  else usersSelectedIds.delete(did);
+  renderUsersTable();
+});
+
+// Pagination
+document.getElementById('prevPageBtn')?.addEventListener('click', () => { usersPage = Math.max(1, usersPage - 1); renderUsersTable(); });
+document.getElementById('nextPageBtn')?.addEventListener('click', () => { usersPage++; renderUsersTable(); });
+document.getElementById('pageSizeSelect')?.addEventListener('change', (e) => {
+  usersPageSize = parseInt(e.target.value, 10);
+  usersPage = 1;
+  renderUsersTable();
+});
+
+// Sortable headers
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable[data-sort]');
+  if (!th) return;
+  const sort = th.dataset.sort;
+  if (usersSortBy === sort) usersSortDesc = !usersSortDesc;
+  else { usersSortBy = sort; usersSortDesc = true; }
+  usersPage = 1;
+  document.querySelectorAll('th.sortable').forEach(h => {
+    h.classList.remove('sort-asc', 'sort-desc');
+    if (h.dataset.sort === usersSortBy) h.classList.add(usersSortDesc ? 'sort-desc' : 'sort-asc');
+  });
+  renderUsersTable();
+});
+
+document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+  document.querySelector('.sidebar')?.classList.toggle('open');
+});
+document.querySelector('.main-content')?.addEventListener('click', (e) => {
+  if (window.innerWidth <= 600 && document.querySelector('.sidebar.open') && !e.target.closest('.sidebar')) {
+    document.querySelector('.sidebar')?.classList.remove('open');
+  }
+});
+
+initTheme();
 checkAuth();
