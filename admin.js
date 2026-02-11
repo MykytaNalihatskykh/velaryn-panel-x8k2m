@@ -351,13 +351,13 @@ function renderUsersTable() {
         grp.ip !== 'no-ip' ? `<button class="action-btn edit" data-action="edit-ip-note" data-ip="${esc(grp.ip)}" title="Add/Edit note for this IP">📝 Note</button>` : '',
         !blocked ? `<button class="action-btn block" data-action="block-user" data-ip="${esc(grp.ip)}">Block</button>` : ''
       ].filter(Boolean).join('');
-      rows.push(`<tr class="ip-group-row clickable" data-action="${rowAction}" ${rowData}>
+      rows.push(`<tr class="ip-group-row clickable${expanded ? ' expanded' : ''}" data-action="${rowAction}" ${rowData}>
         <td class="col-check"></td>
         <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grp.ip === 'no-ip' ? 'No IP' : grp.ip)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${grpNote ? esc(grpNote) : (singleDevice ? 'Click to open profile' : arrow + ' Click to expand')}</div></div></div></td>
         <td><div class="location-cell"><span class="country">${esc(lastDevice?.country || 'Unknown')}</span></div></td>
         <td><div class="system-cell">—</div></td>
         <td><div class="stats-cell">—</div></td>
-        <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`} <span class="badge" style="font-size:11px;">${licensedCount}/${grp.count} licensed</span></div></td>
+        <td><div class="status-cell">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`} <span class="badge badge-small">${licensedCount}/${grp.count} licensed</span></div></td>
         <td class="time-ago">${fmtDate(lastDevice?.last_seen)}</td>
         <td><div class="actions-cell">${actionsTd}</div></td>
       </tr>`);
@@ -416,7 +416,7 @@ function renderUserRow(user, isChild = false) {
   const ini = getInitials(user.ip || user.device_id || '??');
   const did = user.device_id ? user.device_id.substring(0, 8) : '?';
   const licensed = user.license_status === 'activated';
-  const licenseBadge = licensed ? '<span class="badge licensed" style="background:var(--success-muted);color:var(--success);font-size:11px;padding:2px 8px;border-radius:6px;">Licensed</span>' : '<span class="badge unlicensed" style="background:var(--danger-muted);color:var(--danger);font-size:11px;padding:2px 8px;border-radius:6px;">No license</span>';
+  const licenseBadge = licensed ? '<span class="badge licensed">Licensed</span>' : '<span class="badge unlicensed">No license</span>';
   const checked = usersSelectedIds.has(user.device_id) ? 'checked' : '';
   const rowClass = (usersSelectedIds.has(user.device_id) ? 'clickable selected' : 'clickable') + (isChild ? ' ip-child-row' : '');
   return `<tr class="${rowClass}" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
@@ -425,12 +425,12 @@ function renderUserRow(user, isChild = false) {
     <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
     <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
     <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
-    <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
+    <td><div class="status-cell">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
     <td class="time-ago">${fmtDate(user.last_seen)}</td>
     <td>
       <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
       ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
-      <button class="action-btn delete" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}" style="color:var(--danger);">🗑️</button>
+      <button class="action-btn delete text-danger" data-action="delete-user" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">🗑️</button>
     </td>
   </tr>`;
 }
@@ -443,7 +443,7 @@ function renderBlockedTable() {
     return;
   }
   tbody.innerHTML = blockedData.map(b => `<tr>
-    <td><span style="color:var(--primary);font-family:monospace">${esc(b.ip)}</span></td>
+    <td><span class="mono-primary">${esc(b.ip)}</span></td>
     <td>${esc(b.reason || '-')}</td>
     <td class="time-ago">${fmtDate(b.blocked_at)}</td>
     <td><button class="action-btn unblock" data-action="unblock-user" data-ip="${esc(b.ip)}">Unblock</button></td>
@@ -579,7 +579,7 @@ function renderKeysForUser(ip) {
     </div>
     <div class="table-card">
       <div class="table-header"><h3>Keys for ${esc(ip)}</h3></div>
-      <div style="max-height:400px;overflow-y:auto;">
+      <div class="modal-scroll">
       <table>
         <thead><tr><th>Key</th><th>Status</th><th>Device</th><th>Bound At</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody>${!filtered.length
@@ -632,13 +632,13 @@ function renderAllKeysTable() {
 function renderKeyRow(k, showOwner = false) {
   const statusClass = k.status === 'active' ? 'key-active' : k.status === 'revoked' ? 'key-revoked' : 'key-unused';
   const deviceHtml = k.bound_device_id
-    ? `<span style="color:var(--text-muted);font-size:11px" title="${esc(k.bound_device_id)}">${esc(k.bound_device_id.substring(0, 12))}...</span>`
-    : '<span style="color:var(--text-dim)">-</span>';
+    ? `<span class="text-muted" title="${esc(k.bound_device_id)}">${esc(k.bound_device_id.substring(0, 12))}...</span>`
+    : '<span class="text-dim">-</span>';
 
   if (showOwner) {
     const ownerHtml = k.owner_ip || k.bound_ip
-      ? `<span style="color:var(--primary);font-family:monospace;font-size:12px">${esc(k.owner_ip || k.bound_ip)}</span>`
-      : '<span style="color:var(--text-dim)">Unassigned</span>';
+      ? `<span class="mono-primary">${esc(k.owner_ip || k.bound_ip)}</span>`
+      : '<span class="text-dim">Unassigned</span>';
     return `<tr>
       <td><code class="key-code">${esc(k.key)}</code> <button class="copy-btn" data-action="copy-key" data-key="${esc(k.key)}" title="Copy">📋</button></td>
       <td><span class="key-badge ${statusClass}">${k.status}</span></td>
@@ -718,13 +718,13 @@ async function deleteUser(deviceId, ip) {
   const user = usersData.find(u => u.device_id === deviceId);
   const displayName = user?.note || ip || deviceId?.substring(0, 12) || 'Unknown';
   openModal('Delete User', `
-    <div style="text-align:center;padding:10px 0;">
-      <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
-      <p style="font-size:15px;margin-bottom:8px;">Delete user <strong>${esc(displayName)}</strong>?</p>
-      <p style="color:var(--text-muted);font-size:13px;">IP: ${esc(ip || 'N/A')}</p>
-      <p style="color:var(--text-muted);font-size:13px;">Device: ${esc(deviceId ? deviceId.substring(0, 16) + '...' : 'N/A')}</p>
-      <p style="color:var(--danger);font-size:12px;margin-top:12px;">This will permanently delete all user data (users + user_data). This action cannot be undone.</p>
-      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+    <div class="modal-body">
+      <div class="modal-warning-icon">⚠️</div>
+      <p>Delete user <strong>${esc(displayName)}</strong>?</p>
+      <p class="modal-muted">IP: ${esc(ip || 'N/A')}</p>
+      <p class="modal-muted">Device: ${esc(deviceId ? deviceId.substring(0, 16) + '...' : 'N/A')}</p>
+      <p class="modal-danger">This will permanently delete all user data (users + user_data). This action cannot be undone.</p>
+      <div class="modal-confirm-row center">
         <input type="checkbox" id="deleteConfirmCheck">
         <label for="deleteConfirmCheck">I understand, delete permanently</label>
       </div>
@@ -815,16 +815,16 @@ function showFindDuplicatesModal() {
     showToast('No duplicate IP groups found', 'success');
     return;
   }
-  let html = '<p style="margin-bottom:12px;">IP groups with multiple devices. Review and delete empty duplicates manually.</p>';
-  html += '<div style="max-height:360px;overflow-y:auto;">';
+  let html = '<p class="modal-intro">IP groups with multiple devices. Review and delete empty duplicates manually.</p>';
+  html += '<div class="modal-scroll-sm">';
   for (const grp of multiIP) {
-    html += `<div class="dup-group" style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;padding:12px;">`;
-    html += `<div style="font-weight:600;margin-bottom:8px;">${esc(grp.ip)} — ${grp.count} devices</div>`;
+    html += `<div class="dup-group">`;
+    html += `<div class="dup-group-header">${esc(grp.ip)} — ${grp.count} devices</div>`;
     for (const u of grp.devices) {
       const msgs = u.messages_sent || 0;
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);gap:12px;flex-wrap:wrap;">
+      html += `<div class="dup-device-row">
         <span>${esc((u.device_id || '').substring(0, 12))}… · ${u.os || '?'} · ${msgs} msgs</span>
-        <button class="action-btn delete" data-action="dup-delete" data-device-id="${esc(u.device_id)}" data-ip="${esc(grp.ip)}" style="color:var(--danger);font-size:11px;">Delete</button>
+        <button class="action-btn delete badge-small" data-action="dup-delete" data-device-id="${esc(u.device_id)}" data-ip="${esc(grp.ip)}">Delete</button>
       </div>`;
     }
     html += '</div>';
@@ -840,7 +840,7 @@ function bulkBlockUsers() {
   const ips = users.map(u => u.ip).filter(ip => ip && isValidIP(ip));
   if (!ips.length) { showToast('No valid IPs to block', 'error'); return; }
   openModal('Block Selected Users', `
-    <p style="margin-bottom:12px;">Block ${ips.length} user(s)?</p>
+    <p class="modal-intro">Block ${ips.length} user(s)?</p>
     <div class="modal-field"><label>Reason (optional)</label><textarea id="bulkBlockReason" placeholder="e.g., Violation of terms"></textarea></div>
   `, async () => {
     const reason = (document.getElementById('bulkBlockReason').value || '').trim();
@@ -860,10 +860,10 @@ function bulkDeleteUsers() {
   const ids = Array.from(usersSelectedIds);
   if (!ids.length) return;
   openModal('Delete Selected Users', `
-    <div style="text-align:center;padding:10px 0;">
-      <p style="font-size:15px;margin-bottom:8px;">Permanently delete <strong>${ids.length}</strong> user(s)?</p>
-      <p style="color:var(--danger);font-size:12px;margin-top:12px;">This cannot be undone. All user data will be lost.</p>
-      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+    <div class="modal-body">
+      <p>Permanently delete <strong>${ids.length}</strong> user(s)?</p>
+      <p class="modal-danger">This cannot be undone. All user data will be lost.</p>
+      <div class="modal-confirm-row center">
         <input type="checkbox" id="bulkDeleteConfirmCheck">
         <label for="bulkDeleteConfirmCheck">I understand, delete permanently</label>
       </div>
@@ -923,9 +923,9 @@ async function revokeKey(id) {
 
 async function deleteKey(id) {
   openModal('Delete Key', `
-    <div style="text-align:center;padding:10px 0;">
-      <p style="font-size:15px;margin-bottom:12px;">Delete this unused key? This cannot be undone.</p>
-      <div class="modal-confirm-row" style="justify-content:center;margin-top:16px;">
+    <div class="modal-body">
+      <p>Delete this unused key? This cannot be undone.</p>
+      <div class="modal-confirm-row center">
         <input type="checkbox" id="deleteKeyConfirmCheck">
         <label for="deleteKeyConfirmCheck">I understand</label>
       </div>
@@ -1074,7 +1074,7 @@ function renderDatabaseTab(ud) {
   const q = (document.getElementById('databaseSearch')?.value || '').toLowerCase();
   let f = followers;
   if (q) f = followers.filter(x => (x.nickname || '').toLowerCase().includes(q) || (x.id || '').toString().includes(q));
-  tbody.innerHTML = f.map((x, i) => `<tr><td>${x.number || i+1}</td><td style="color:#a78bfa;font-weight:500">${esc(x.nickname || x.id || '-')}</td><td><span class="badge" style="background:${statusColor(x.status)};color:#fff">${x.status || '?'}</span></td><td>${x.invited ? '✅' : '❌'}</td></tr>`).join('');
+  tbody.innerHTML = f.map((x, i) => `<tr><td>${x.number || i+1}</td><td class="text-primary" style="font-weight:500">${esc(x.nickname || x.id || '-')}</td><td><span class="badge" style="background:${statusColor(x.status)};color:#fff">${x.status || '?'}</span></td><td>${x.invited ? '✅' : '❌'}</td></tr>`).join('');
 }
 
 function renderHistoryTab(ud) {
@@ -1102,17 +1102,17 @@ function renderHistoryTab(ud) {
     // Status badge
     let statusBadge = '';
     if (isPersonal) {
-      if (item.success === true) statusBadge = '<span class="badge" style="background:rgba(52,211,153,0.15);color:#34d399;margin-left:8px;font-size:11px;">sent</span>';
-      else if (item.success === false) statusBadge = `<span class="badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:8px;font-size:11px;">failed</span>`;
+      if (item.success === true) statusBadge = '<span class="badge badge-success" style="margin-left:8px;">sent</span>';
+      else if (item.success === false) statusBadge = `<span class="badge badge-danger" style="margin-left:8px;">failed</span>`;
     }
     // Type badge
     const typeBadge = isPersonal
-      ? '<span style="color:#a78bfa;font-size:11px;margin-right:6px;">Personal</span>'
-      : '<span style="color:#60a5fa;font-size:11px;margin-right:6px;">Auto</span>';
+      ? '<span class="text-primary badge-small" style="margin-right:6px;">Personal</span>'
+      : '<span class="badge-small" style="color:var(--accent-blue);margin-right:6px;">Auto</span>';
     // Target display
     const targetHtml = item.target
-      ? `<a href="${esc(safeUrl(targetUrl))}" target="_blank" style="color:#a78bfa;font-weight:500;">${esc(targetLabel)}</a>`
-      : `<span style="color:#71717a;">${esc(targetLabel)}</span>`;
+      ? `<a href="${esc(safeUrl(targetUrl))}" target="_blank" class="text-primary" style="font-weight:500;">${esc(targetLabel)}</a>`
+      : `<span class="text-dim">${esc(targetLabel)}</span>`;
     return `<div class="history-item"><div class="target">${typeBadge}${targetHtml}${statusBadge}</div><div class="time">${fmtDate(item.timestamp || item.sentAt || item.date)}</div></div>`;
   }).join('');
 }
