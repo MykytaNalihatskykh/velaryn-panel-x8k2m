@@ -1,6 +1,7 @@
 /* ===== VELARYN ADMIN - Theme Variables ===== */
-:root,
-[data-theme="dark"] {
+/* Dark theme (default) */
+html,
+html[data-theme="dark"] {
   --bg: #0d0d0f;
   --bg-secondary: #1c1c1e;
   --card-bg: #18181b;
@@ -27,7 +28,8 @@
   --shadow: rgba(0, 0, 0, 0.3);
 }
 
-[data-theme="light"] {
+/* Light theme - explicit override */
+html[data-theme="light"] {
   --bg: #f8fafc;
   --bg-secondary: #f1f5f9;
   --card-bg: #ffffff;
@@ -39,7 +41,7 @@
   --text-muted: #475569;
   --text-dim: #64748b;
   --border: #e2e8f0;
-  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-subtle: rgba(0, 0, 0, 0.08);
   --input-bg: #f1f5f9;
   --input-border: #cbd5e1;
   --success-muted: rgba(52, 211, 153, 0.2);
@@ -48,8 +50,9 @@
   --shadow: rgba(0, 0, 0, 0.08);
 }
 
+/* System preference for initial load (before JS sets data-theme) */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
+  html:not([data-theme]) {
     --bg: #f8fafc;
     --bg-secondary: #f1f5f9;
     --card-bg: #ffffff;
@@ -91,10 +94,30 @@ input, textarea, select { font-family: inherit; }
 /* ===== LOGIN ===== */
 #loginScreen {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--bg) 0%, var(--bg-secondary) 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--bg-secondary) 50%, var(--primary-muted) 100%);
+  position: relative;
+}
+.theme-toggle-login {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.theme-toggle-login span { font-size: 13px; color: var(--text-muted); }
+.theme-toggle-login .theme-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
 }
 .login-card {
   background: var(--card-bg);
@@ -104,9 +127,15 @@ input, textarea, select { font-family: inherit; }
   width: 100%;
   max-width: 400px;
   text-align: center;
-  box-shadow: 0 4px 24px var(--shadow);
+  box-shadow: 0 8px 32px var(--shadow);
 }
-.login-logo { font-size: 42px; margin-bottom: 12px; }
+.login-logo-img {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  object-fit: contain;
+}
+.login-logo { font-size: 42px; margin-bottom: 12px; display: none; }
 .login-title {
   font-family: 'Unbounded', sans-serif;
   font-size: 24px;
@@ -174,6 +203,11 @@ input, textarea, select { font-family: inherit; }
   height: 10px;
   background: var(--primary);
   border-radius: 50%;
+}
+.sidebar-brand .sidebar-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 .sidebar-nav { padding: 16px 12px; flex: 1; }
 .nav-item {
@@ -898,6 +932,8 @@ tr.selected td { background: var(--primary-muted); }
   .nav-item span:not(.icon),
   .sidebar-footer .logout-btn span:not(.icon),
   .theme-toggle-wrap { display: none !important; }
+  .sidebar-brand { justify-content: center; }
+  .sidebar-brand .sidebar-logo { margin: 0; }
   .sidebar-brand .dot { margin: 0 auto; }
   .nav-item, .logout-btn { justify-content: center; padding: 12px; }
   .main-content { margin-left: 72px; padding: 20px 16px; }
