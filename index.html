@@ -7,27 +7,32 @@
   <link rel="icon" type="image/png" href="logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <!-- LOGIN -->
   <div id="loginScreen">
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
     <div class="theme-toggle-login">
-      <span>Theme:</span>
+      <span>Theme</span>
       <select id="themeSelectLogin" class="theme-select" aria-label="Theme">
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
       </select>
     </div>
-    <div class="login-card">
+    <div class="login-card glass">
       <div class="login-logo-wrap"><img src="logo.png" alt="Velaryn"></div>
-      <div class="login-title">Velaryn Admin</div>
-      <div class="login-sub">Enter admin password</div>
+      <h1 class="login-title">Velaryn Admin</h1>
+      <p class="login-sub">Enter admin password</p>
       <input type="password" id="passwordInput" class="login-input" placeholder="Password" autocomplete="current-password">
-      <div id="loginError" class="login-error" style="display:none;color:var(--danger);font-size:13px;margin-bottom:12px;"></div>
+      <div id="loginError" class="login-error" style="display:none;"></div>
       <button onclick="login()" class="login-btn" id="loginBtn">Log In</button>
     </div>
   </div>
@@ -35,7 +40,7 @@
   <!-- DASHBOARD -->
   <div id="dashboard">
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar glass">
       <div class="sidebar-brand">
         <div class="logo-wrap"><img src="logo.png" alt="Velaryn"></div>
         <span>Velaryn</span>
@@ -67,20 +72,20 @@
 
       <!-- Stats -->
       <div class="stats-row">
-        <div class="stat-card"><span class="label">Total Users</span><span class="value purple" id="totalUsers">0</span></div>
-        <div class="stat-card"><span class="label">Online</span><span class="value green" id="onlineUsers">0</span></div>
-        <div class="stat-card"><span class="label">Blocked</span><span class="value red" id="blockedUsers">0</span></div>
-        <div class="stat-card"><span class="label">Total Messages</span><span class="value blue" id="totalMessages">0</span></div>
-        <div class="stat-card"><span class="label">Keys</span><span class="value" id="statActiveKeys">0/0</span></div>
+        <div class="stat-card glass"><span class="label">Total Users</span><span class="value purple" id="totalUsers">0</span></div>
+        <div class="stat-card glass"><span class="label">Online</span><span class="value green" id="onlineUsers">0</span></div>
+        <div class="stat-card glass"><span class="label">Blocked</span><span class="value red" id="blockedUsers">0</span></div>
+        <div class="stat-card glass"><span class="label">Total Messages</span><span class="value blue" id="totalMessages">0</span></div>
+        <div class="stat-card glass"><span class="label">Keys</span><span class="value" id="statActiveKeys">0/0</span></div>
       </div>
 
       <!-- USERS SECTION -->
       <section id="usersSection">
-        <div class="table-card">
+        <div class="table-card glass">
           <div class="table-header">
             <div class="table-header-left">
               <h3 id="usersTitle">All Users</h3>
-              <div class="users-view-toggle" id="usersViewToggle">
+              <div class="users-view-toggle">
                 <button class="view-toggle-btn active" data-view="ip" title="Group by IP">By IP</button>
                 <button class="view-toggle-btn" data-view="device" title="One row per device">By Device</button>
               </div>
@@ -99,7 +104,7 @@
           <div id="usersBulkBar" class="bulk-actions-bar" style="display:none;">
             <span id="bulkSelectedCount">0 selected</span>
             <button class="action-btn block" data-action="bulk-block">Block</button>
-            <button class="action-btn delete" data-action="bulk-delete" style="color:var(--danger);">Delete</button>
+            <button class="action-btn delete" data-action="bulk-delete">Delete</button>
             <button class="action-btn secondary" data-action="bulk-deselect">Cancel</button>
           </div>
           <div class="table-scroll">
@@ -117,7 +122,7 @@
                 </tr>
               </thead>
               <tbody id="usersTableBody">
-                <tr><td colspan="8" class="empty-state"><div class="skeleton skeleton-text" style="width:60%;margin:0 auto 8px;"></div><div class="skeleton skeleton-text" style="width:40%;margin:0 auto;"></div></td></tr>
+                <tr><td colspan="8" class="empty-state"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -138,7 +143,7 @@
 
       <!-- BLOCKED SECTION -->
       <section id="blockedSection" style="display: none;">
-        <div class="table-card">
+        <div class="table-card glass">
           <div class="table-header"><h3>Blocked Users</h3></div>
           <div class="table-scroll">
             <table>
@@ -152,10 +157,10 @@
       <!-- KEYS SECTION -->
       <section id="keysSection" style="display: none;">
         <div class="key-stats-row">
-          <div class="key-stat"><strong id="keyStat-total">0</strong>Total</div>
-          <div class="key-stat"><strong id="keyStat-active">0</strong>Active</div>
-          <div class="key-stat"><strong id="keyStat-unused">0</strong>Unused</div>
-          <div class="key-stat"><strong id="keyStat-revoked">0</strong>Revoked</div>
+          <div class="key-stat glass"><strong id="keyStat-total">0</strong>Total</div>
+          <div class="key-stat glass"><strong id="keyStat-active">0</strong>Active</div>
+          <div class="key-stat glass"><strong id="keyStat-unused">0</strong>Unused</div>
+          <div class="key-stat glass"><strong id="keyStat-revoked">0</strong>Revoked</div>
         </div>
         <div class="keys-toolbar">
           <div class="keys-filter-tabs">
@@ -171,10 +176,10 @@
           </div>
         </div>
         <div class="keys-layout">
-          <div class="keys-user-list">
+          <div class="keys-user-list glass">
             <div class="keys-user-list-header"><h4>Users</h4></div>
             <div class="keys-user-list-items" id="keysUserList">
-              <div class="empty-state small"><div class="skeleton skeleton-text" style="margin-bottom:8px;"></div><div class="skeleton skeleton-text"></div></div>
+              <div class="empty-state small"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div>
             </div>
           </div>
           <div class="keys-panel">
@@ -185,7 +190,7 @@
               </div>
             </div>
             <div id="keysAllTable">
-              <div class="table-card">
+              <div class="table-card glass">
                 <div class="table-header"><h3>All Keys</h3></div>
                 <div class="table-scroll" style="max-height:500px;">
                   <table>
@@ -201,28 +206,26 @@
 
       <!-- USER PROFILE -->
       <section id="userProfileSection">
-        <div style="margin-bottom: 16px;">
-          <button onclick="closeUserProfile()" class="back-btn" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;">← Back to Users</button>
-        </div>
-        <div class="profile-header">
+        <button onclick="closeUserProfile()" class="back-btn">← Back to Users</button>
+        <div class="profile-header glass">
           <div class="profile-avatar" id="profileAvatar">??</div>
           <div class="profile-meta">
             <div class="profile-ip" id="profileIP">-</div>
-            <div style="color:var(--text-muted);font-size:12px;font-family:monospace;" id="profileDeviceId">-</div>
+            <div class="profile-device-id" id="profileDeviceId">-</div>
             <div class="profile-note-text" id="profileNote">No note</div>
-            <div id="profileStatus" style="margin-top:4px;"></div>
+            <div id="profileStatus"></div>
           </div>
           <div class="profile-actions">
             <button onclick="refreshUserProfile()">🔄 Refresh</button>
             <button onclick="exportUserData()">📥 Export</button>
-            <button onclick="deleteCurrentUser()" style="border-color:var(--danger);color:var(--danger);">🗑️ Delete</button>
+            <button onclick="deleteCurrentUser()" class="btn-danger">🗑️ Delete</button>
           </div>
         </div>
         <div class="profile-quick-stats">
-          <div class="profile-stat"><div class="val" id="profileMessages">0</div><div class="lbl">Messages</div></div>
-          <div class="profile-stat"><div class="val" id="profileParses">0</div><div class="lbl">Parses</div></div>
-          <div class="profile-stat"><div class="val" id="profileSessions">0</div><div class="lbl">Sessions</div></div>
-          <div class="profile-stat"><div class="val" id="profileAIRequests">0</div><div class="lbl">AI Requests</div></div>
+          <div class="profile-stat glass"><div class="val" id="profileMessages">0</div><div class="lbl">Messages</div></div>
+          <div class="profile-stat glass"><div class="val" id="profileParses">0</div><div class="lbl">Parses</div></div>
+          <div class="profile-stat glass"><div class="val" id="profileSessions">0</div><div class="lbl">Sessions</div></div>
+          <div class="profile-stat glass"><div class="val" id="profileAIRequests">0</div><div class="lbl">AI Requests</div></div>
         </div>
         <div class="profile-tabs-nav">
           <button class="profile-tab active" data-tab="info">Info</button>
@@ -234,24 +237,24 @@
         </div>
         <div class="profile-tab-content active" id="tabInfo">
           <div class="info-grid">
-            <div class="info-item"><div class="label">OS</div><div class="value" id="infoOS">-</div></div>
-            <div class="info-item"><div class="label">Browser</div><div class="value" id="infoBrowser">-</div></div>
-            <div class="info-item"><div class="label">Language</div><div class="value" id="infoLanguage">-</div></div>
-            <div class="info-item"><div class="label">Screen</div><div class="value" id="infoScreen">-</div></div>
-            <div class="info-item"><div class="label">Timezone</div><div class="value" id="infoTimezone">-</div></div>
-            <div class="info-item"><div class="label">Country</div><div class="value" id="infoCountry">-</div></div>
-            <div class="info-item"><div class="label">City</div><div class="value" id="infoCity">-</div></div>
-            <div class="info-item"><div class="label">First Seen</div><div class="value" id="infoFirstSeen">-</div></div>
-            <div class="info-item"><div class="label">Last Activity</div><div class="value" id="infoLastActivity">-</div></div>
-            <div class="info-item"><div class="label">Device ID</div><div class="value" id="infoDeviceId" style="font-family:monospace;font-size:12px;word-break:break-all;">-</div></div>
-            <div class="info-item"><div class="label">Extension Version</div><div class="value" id="infoVersion">-</div></div>
+            <div class="info-item glass"><div class="label">OS</div><div class="value" id="infoOS">-</div></div>
+            <div class="info-item glass"><div class="label">Browser</div><div class="value" id="infoBrowser">-</div></div>
+            <div class="info-item glass"><div class="label">Language</div><div class="value" id="infoLanguage">-</div></div>
+            <div class="info-item glass"><div class="label">Screen</div><div class="value" id="infoScreen">-</div></div>
+            <div class="info-item glass"><div class="label">Timezone</div><div class="value" id="infoTimezone">-</div></div>
+            <div class="info-item glass"><div class="label">Country</div><div class="value" id="infoCountry">-</div></div>
+            <div class="info-item glass"><div class="label">City</div><div class="value" id="infoCity">-</div></div>
+            <div class="info-item glass"><div class="label">First Seen</div><div class="value" id="infoFirstSeen">-</div></div>
+            <div class="info-item glass"><div class="label">Last Activity</div><div class="value" id="infoLastActivity">-</div></div>
+            <div class="info-item glass"><div class="label">Device ID</div><div class="value mono" id="infoDeviceId">-</div></div>
+            <div class="info-item glass"><div class="label">Extension Version</div><div class="value" id="infoVersion">-</div></div>
           </div>
         </div>
         <div class="profile-tab-content" id="tabInvites"><div id="invitesGrid"></div></div>
         <div class="profile-tab-content" id="tabDatabase">
-          <div class="table-card">
+          <div class="table-card glass">
             <div class="table-header">
-              <h3>Followers <span id="databaseCount" style="color:var(--text-muted);font-weight:400;font-size:13px;">0</span></h3>
+              <h3>Followers <span id="databaseCount" class="count-muted">0</span></h3>
               <input type="text" id="databaseSearch" class="table-search" placeholder="Search followers...">
             </div>
             <div class="table-scroll" style="max-height:400px;">
@@ -263,31 +266,31 @@
           </div>
         </div>
         <div class="profile-tab-content" id="tabHistory">
-          <div class="table-card">
+          <div class="table-card glass">
             <div class="table-header"><h3>Send History</h3></div>
-            <div id="historyList" style="max-height:400px;overflow-y:auto;"></div>
+            <div id="historyList" class="history-list"></div>
           </div>
         </div>
         <div class="profile-tab-content" id="tabSettings">
           <div class="info-grid">
-            <div class="info-item"><div class="label">Groq API Key</div><div class="value" id="settingsGroqKey" style="word-break:break-all;font-family:monospace;font-size:13px;">-</div></div>
-            <div class="info-item"><div class="label">Theme</div><div class="value" id="settingsTheme">-</div></div>
-            <div class="info-item"><div class="label">Language</div><div class="value" id="settingsLanguage">-</div></div>
+            <div class="info-item glass"><div class="label">Groq API Key</div><div class="value mono" id="settingsGroqKey">-</div></div>
+            <div class="info-item glass"><div class="label">Theme</div><div class="value" id="settingsTheme">-</div></div>
+            <div class="info-item glass"><div class="label">Language</div><div class="value" id="settingsLanguage">-</div></div>
           </div>
         </div>
         <div class="profile-tab-content" id="tabTracker">
-          <div class="stats-row" style="margin-bottom:16px;">
-            <div class="stat-card"><span class="label">Total Spent</span><span class="value green" id="trackerTotalSpent">$0</span></div>
-            <div class="stat-card"><span class="label">Transactions</span><span class="value blue" id="trackerTransactions">0</span></div>
-            <div class="stat-card"><span class="label">Unique Users</span><span class="value purple" id="trackerUniqueUsers">0</span></div>
-            <div class="stat-card"><span class="label">Notes</span><span class="value" id="trackerNotes">0</span></div>
+          <div class="stats-row" style="margin-bottom:20px;">
+            <div class="stat-card glass"><span class="label">Total Spent</span><span class="value green" id="trackerTotalSpent">$0</span></div>
+            <div class="stat-card glass"><span class="label">Transactions</span><span class="value blue" id="trackerTransactions">0</span></div>
+            <div class="stat-card glass"><span class="label">Unique Users</span><span class="value purple" id="trackerUniqueUsers">0</span></div>
+            <div class="stat-card glass"><span class="label">Notes</span><span class="value" id="trackerNotes">0</span></div>
           </div>
-          <div class="table-card">
+          <div class="table-card glass">
             <div class="table-header">
               <h3>Tracker Users</h3>
-              <div style="display:flex;gap:10px;">
+              <div class="table-header-actions">
                 <input type="text" id="trackerSearch" class="table-search" placeholder="Search...">
-                <select id="trackerSort" style="padding:8px 12px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:8px;color:var(--text);font-size:13px;">
+                <select id="trackerSort">
                   <option value="spent">By Spent</option>
                   <option value="transactions">By Transactions</option>
                   <option value="rank">By Rank</option>
@@ -303,9 +306,9 @@
             </div>
           </div>
           <div class="tracker-extra-sections">
-            <div class="tracker-extra-card"><h4>📝 User Notes</h4><div class="content" id="trackerNotesSection"></div></div>
-            <div class="tracker-extra-card"><h4>💰 Last Transactions</h4><div class="content" id="trackerLastTransactionsSection"></div></div>
-            <div class="tracker-extra-card full-width"><h4>📤 Last Sent Messages</h4><div class="content" id="trackerLastSentSection"></div></div>
+            <div class="tracker-extra-card glass"><h4>📝 User Notes</h4><div class="content" id="trackerNotesSection"></div></div>
+            <div class="tracker-extra-card glass"><h4>💰 Last Transactions</h4><div class="content" id="trackerLastTransactionsSection"></div></div>
+            <div class="tracker-extra-card glass full-width"><h4>📤 Last Sent Messages</h4><div class="content" id="trackerLastSentSection"></div></div>
           </div>
         </div>
       </section>
@@ -314,7 +317,7 @@
 
   <!-- MODAL -->
   <div id="modalOverlay">
-    <div class="modal-box">
+    <div class="modal-box glass">
       <h3 id="modalTitle"></h3>
       <div id="modalContent"></div>
       <div class="modal-actions">
@@ -328,9 +331,9 @@
   <div id="toastContainer"></div>
 
   <!-- ERROR BOUNDARY -->
-  <div id="errorBoundary" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px;">
-    <div style="font-size:18px;font-weight:600;text-align:center;">Something went wrong</div>
-    <div id="errorBoundaryMsg" style="color:var(--text-muted);text-align:center;"></div>
+  <div id="errorBoundary" style="display:none;" class="error-boundary">
+    <div class="error-boundary-title">Something went wrong</div>
+    <div id="errorBoundaryMsg" class="error-boundary-msg"></div>
     <button onclick="location.reload()" class="modal-btn confirm">Reload</button>
   </div>
 
