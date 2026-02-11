@@ -505,6 +505,42 @@ tr.selected td { background: rgba(139, 92, 246, 0.08); }
 }
 .filter-count { font-size: 11px; opacity: 0.8; }
 
+.users-view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.users-view-toggle .view-toggle-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.users-view-toggle .view-toggle-btn:hover { color: var(--text); }
+.users-view-toggle .view-toggle-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.ip-group-row { cursor: pointer; }
+.ip-group-row:hover { background: var(--surface-elevated); }
+.ip-child-row td:first-child { padding-left: 48px; }
+.ip-devices-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+.ip-expand-hint { font-size: 11px; color: var(--text-dim); }
+
 .key-action-btn {
   padding: 10px 20px;
   border-radius: var(--radius-sm);
