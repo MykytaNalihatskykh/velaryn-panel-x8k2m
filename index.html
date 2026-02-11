@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Velaryn Admin</title>
+  <link rel="icon" type="image/png" href="logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600;700&family=Unbounded:wght@500;700;800&display=swap" rel="stylesheet">
@@ -13,8 +14,16 @@
 
   <!-- LOGIN -->
   <div id="loginScreen">
+    <div class="theme-toggle-login">
+      <span>Theme:</span>
+      <select id="themeSelectLogin" class="theme-select" aria-label="Theme">
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
     <div class="login-card">
-      <div class="login-logo">⚡</div>
+      <img src="logo.png" alt="Velaryn" class="login-logo-img">
       <div class="login-title">Velaryn Admin</div>
       <div class="login-sub">Enter admin password</div>
       <input type="password" id="passwordInput" class="login-input" placeholder="Password" autocomplete="current-password">
@@ -27,7 +36,10 @@
   <div id="dashboard">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="sidebar-brand"><div class="dot"></div><span>Velaryn</span></div>
+      <div class="sidebar-brand">
+        <img src="logo.png" alt="Velaryn" class="sidebar-logo">
+        <span>Velaryn</span>
+      </div>
       <nav class="sidebar-nav">
         <button class="nav-item active" data-tab="users"><span class="icon">👥</span><span>Users</span></button>
         <button class="nav-item" data-tab="blocked"><span class="icon">🔒</span><span>Blocked</span></button>
