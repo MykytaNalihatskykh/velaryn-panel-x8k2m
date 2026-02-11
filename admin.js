@@ -343,15 +343,20 @@ function renderUsersTable() {
       const licensedCount = grp.devices.filter(u => u.license_status === 'activated').length;
       const rowAction = singleDevice ? 'open-profile' : 'toggle-ip';
       const rowData = singleDevice ? `data-device-id="${esc(lastDevice?.device_id || '')}"` : `data-ip="${esc(grp.ip)}"`;
+      const grpNote = grp.devices[0]?.note || '';
+      const actionsTd = [
+        grp.ip !== 'no-ip' ? `<button class="action-btn edit" data-action="edit-ip-note" data-ip="${esc(grp.ip)}" title="Add/Edit note for this IP">📝 Note</button>` : '',
+        !blocked ? `<button class="action-btn block" data-action="block-user" data-ip="${esc(grp.ip)}">Block</button>` : ''
+      ].filter(Boolean).join('');
       rows.push(`<tr class="ip-group-row clickable" data-action="${rowAction}" ${rowData}>
         <td class="col-check"></td>
-        <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grp.ip === 'no-ip' ? 'No IP' : grp.ip)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${singleDevice ? 'Click to open profile' : arrow + ' Click to expand'}</div></div></div></td>
+        <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grp.ip === 'no-ip' ? 'No IP' : grp.ip)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${grpNote ? esc(grpNote) : (singleDevice ? 'Click to open profile' : arrow + ' Click to expand')}</div></div></div></td>
         <td><div class="location-cell"><span class="country">${esc(lastDevice?.country || 'Unknown')}</span></div></td>
         <td><div class="system-cell">—</div></td>
         <td><div class="stats-cell">—</div></td>
         <td><div style="display:flex;flex-direction:column;gap:4px;">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`} <span class="badge" style="font-size:11px;">${licensedCount}/${grp.count} licensed</span></div></td>
         <td class="time-ago">${fmtDate(lastDevice?.last_seen)}</td>
-        <td>${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(grp.ip)}">Block</button>`}</td>
+        <td><div class="actions-cell">${actionsTd}</div></td>
       </tr>`);
       if (expanded && grp.devices.length > 0) {
         for (const u of grp.devices) rows.push(renderUserRow(u, true));
@@ -754,6 +759,26 @@ function editNote(deviceId) {
     try {
       await sbPatch(`users?device_id=eq.${encodeURIComponent(deviceId)}`, { note: note || null });
       showToast('Note saved', 'success');
+      closeModal();
+      loadData();
+    } catch (e) { showToast('Failed to save note', 'error'); }
+  });
+}
+
+function editNoteForIP(ip) {
+  if (!ip || ip === 'no-ip') return;
+  const devices = usersData.filter(u => u.ip === ip);
+  const currentNote = devices[0]?.note || '';
+  const deviceCount = devices.length;
+  openModal('Add Note for IP', `
+    <div class="modal-field"><label>IP Address</label><input type="text" value="${esc(ip)}" disabled></div>
+    <div class="modal-field"><label>Devices under this IP</label><input type="text" value="${deviceCount} device${deviceCount > 1 ? 's' : ''}" disabled></div>
+    <div class="modal-field"><label>Note (applies to all devices under this IP, visible only to you)</label><textarea id="ipNote" placeholder="e.g., Suspicious, VIP, Test account">${esc(currentNote)}</textarea></div>
+  `, async () => {
+    const note = (document.getElementById('ipNote').value || '').trim();
+    try {
+      await sbPatch(`users?ip=eq.${encodeURIComponent(ip)}`, { note: note || null });
+      showToast(`Note saved for ${deviceCount} device(s)`, 'success');
       closeModal();
       loadData();
     } catch (e) { showToast('Failed to save note', 'error'); }
@@ -1286,6 +1311,7 @@ document.addEventListener('click', (e) => {
     case 'toggle-ip': toggleIPExpand(ip); return;
     case 'open-profile': openUserProfile(deviceId || ip); break;
     case 'edit-note': editNote(deviceId); break;
+    case 'edit-ip-note': editNoteForIP(ip); return;
     case 'block-user': blockUser(ip); break;
     case 'unblock-user': unblockUser(ip); break;
     case 'delete-user': deleteUser(deviceId, ip); break;
