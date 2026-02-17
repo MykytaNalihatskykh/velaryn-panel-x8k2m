@@ -182,7 +182,7 @@ async function loadData() {
   try {
     const [users, blocked, keys] = await loadWithRetry(async () => {
       const [u, b, k] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/users?select=*&order=last_seen.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))),
+        fetch(`${SUPABASE_URL}/rest/v1/users?select=*&order=last_heartbeat.desc.nullslast,last_seen.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))),
         fetch(`${SUPABASE_URL}/rest/v1/blocked_ips?select=*&order=blocked_at.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status))),
         fetch(`${SUPABASE_URL}/rest/v1/license_keys?select=*&order=created_at.desc`, { headers: sbHeaders(), signal }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
       ]);
@@ -206,11 +206,9 @@ async function loadData() {
 // ===== STATS =====
 function updateStats() {
   const blockedIPs = new Set(blockedData.map(b => b.ip));
-  const now = Date.now();
-  const fiveMinAgo = now - 5 * 60 * 1000;
   const onlineCount = usersData.filter(u => {
     if (blockedIPs.has(u.ip)) return false;
-    return new Date(u.last_activity || u.last_seen).getTime() > fiveMinAgo;
+    return isOnline(u);
   }).length;
   const totalMessages = usersData.reduce((sum, u) => sum + (u.messages_sent || 0), 0);
   const activeKeys = licenseKeysData.filter(k => k.status === 'active').length;
@@ -275,7 +273,7 @@ function getFilteredAndSortedUsers() {
     if (usersSortBy === 'ip') return (u.ip || '').toLowerCase();
     if (usersSortBy === 'country') return (u.country || '').toLowerCase();
     if (usersSortBy === 'messages') return u.messages_sent || 0;
-    return new Date(u.last_seen || 0).getTime();
+    return new Date(u.last_heartbeat || u.last_seen || 0).getTime();
   };
   filtered = [...filtered].sort((a, b) => cmp(getVal(a), getVal(b)));
   return filtered;
@@ -291,7 +289,7 @@ function getGroupedByIP(filtered) {
     groups.get(ip).count++;
   }
   for (const g of groups.values()) {
-    g.devices.sort((a, b) => new Date(b.last_seen || 0).getTime() - new Date(a.last_seen || 0).getTime());
+    g.devices.sort((a, b) => new Date(b.last_heartbeat || b.last_seen || 0).getTime() - new Date(a.last_heartbeat || a.last_seen || 0).getTime());
   }
   return Array.from(groups.values());
 }
@@ -351,14 +349,17 @@ function renderUsersTable() {
         grp.ip !== 'no-ip' ? `<button class="action-btn edit" data-action="edit-ip-note" data-ip="${esc(grp.ip)}" title="Add/Edit note for this IP">📝 Note</button>` : '',
         !blocked ? `<button class="action-btn block" data-action="block-user" data-ip="${esc(grp.ip)}">Block</button>` : ''
       ].filter(Boolean).join('');
+      const grpIpDisplay = grp.ip === 'no-ip' ? 'Detecting...' : grp.ip;
+      const grpCityRegion = [lastDevice?.city, lastDevice?.region].filter(v => v && v !== 'Unknown').join(', ');
+      const grpLastActive = lastDevice?.last_heartbeat || lastDevice?.last_seen;
       rows.push(`<tr class="ip-group-row clickable${expanded ? ' expanded' : ''}" data-action="${rowAction}" ${rowData}>
         <td class="col-check"></td>
-        <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grp.ip === 'no-ip' ? 'No IP' : grp.ip)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${grpNote ? esc(grpNote) : (singleDevice ? 'Click to open profile' : arrow + ' Click to expand')}</div></div></div></td>
-        <td><div class="location-cell"><span class="country">${esc(lastDevice?.country || 'Unknown')}</span></div></td>
+        <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(grpIpDisplay)} <span class="ip-devices-badge">${grp.count} device${grp.count > 1 ? 's' : ''}</span></div><div class="note ip-expand-hint">${grpNote ? esc(grpNote) : (singleDevice ? 'Click to open profile' : arrow + ' Click to expand')}</div></div></div></td>
+        <td><div class="location-cell"><span class="country">${esc(lastDevice?.country || 'Unknown')}</span><span class="city">${esc(grpCityRegion)}</span></div></td>
         <td><div class="system-cell">—</div></td>
         <td><div class="stats-cell">—</div></td>
         <td><div class="status-cell">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`} <span class="badge badge-small">${licensedCount}/${grp.count} licensed</span></div></td>
-        <td class="time-ago">${fmtDate(lastDevice?.last_seen)}</td>
+        <td class="time-ago">${fmtDate(grpLastActive)}</td>
         <td><div class="actions-cell">${actionsTd}</div></td>
       </tr>`);
       if (expanded && grp.devices.length > 0) {
@@ -419,14 +420,17 @@ function renderUserRow(user, isChild = false) {
   const licenseBadge = licensed ? '<span class="badge licensed">Licensed</span>' : '<span class="badge unlicensed">No license</span>';
   const checked = usersSelectedIds.has(user.device_id) ? 'checked' : '';
   const rowClass = (usersSelectedIds.has(user.device_id) ? 'clickable selected' : 'clickable') + (isChild ? ' ip-child-row' : '');
+  const ipDisplay = user.ip || 'Detecting...';
+  const cityRegion = [user.city, user.region].filter(v => v && v !== 'Unknown').join(', ');
+  const lastActive = user.last_heartbeat || user.last_seen;
   return `<tr class="${rowClass}" data-action="open-profile" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">
     <td class="col-check"><input type="checkbox" class="user-row-check" data-device-id="${esc(user.device_id || '')}" ${checked} onclick="event.stopPropagation()"></td>
-    <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(user.ip || 'No IP')}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
-    <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(user.city || '')}</span></div></td>
+    <td><div class="user-cell"><div class="user-avatar">${ini}</div><div class="user-info"><div class="ip">${esc(ipDisplay)}</div><div class="note">${esc(user.note || did)}</div></div></div></td>
+    <td><div class="location-cell"><span class="country">${esc(user.country || 'Unknown')}</span><span class="city">${esc(cityRegion)}</span></div></td>
     <td><div class="system-cell"><div class="os">${esc(user.os || 'Unknown')}</div><div class="browser">${esc((user.browser || '') + ' ' + (user.browser_version || ''))}</div></div></td>
     <td><div class="stats-cell"><div class="main-stat">${user.messages_sent || 0} msgs</div><div class="sub-stat">${user.sessions_count || 1} sessions</div></div></td>
     <td><div class="status-cell">${blocked ? '<span class="badge blocked">Blocked</span>' : `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`}${licenseBadge}</div></td>
-    <td class="time-ago">${fmtDate(user.last_seen)}</td>
+    <td class="time-ago">${fmtDate(lastActive)}</td>
     <td>
       <button class="action-btn edit" data-action="edit-note" data-device-id="${esc(user.device_id || '')}" data-ip="${esc(user.ip)}">✏️</button>
       ${blocked ? '' : `<button class="action-btn block" data-action="block-user" data-ip="${esc(user.ip)}">Block</button>`}
@@ -976,12 +980,12 @@ async function openUserProfile(deviceId) {
 async function loadUserProfile(deviceId) {
   const user = usersData.find(u => u.device_id === deviceId);
   if (!user) return;
-  const ip = user.ip || 'Unknown';
+  const ip = user.ip || 'Detecting...';
   const did = deviceId ? deviceId.substring(0, 12) + '...' : '-';
   setText('profileIP', ip);
   setText('profileDeviceId', did);
   setText('profileNote', user.note || 'No note');
-  setText('profileAvatar', getInitials(ip));
+  setText('profileAvatar', getInitials(user.ip || deviceId));
   const online = isOnline(user);
   document.getElementById('profileStatus').innerHTML = `<span class="online-indicator ${online ? 'online' : 'offline'}">${online ? 'Online' : 'Offline'}</span>`;
   setText('profileMessages', user.messages_sent || 0);
@@ -991,13 +995,13 @@ async function loadUserProfile(deviceId) {
   setText('infoOS', user.os || '-');
   setText('infoBrowser', `${user.browser || '-'} ${user.browser_version || ''}`);
   setText('infoLanguage', user.language || '-');
-  setText('infoScreen', user.screen_resolution || '-');
   setText('infoTimezone', user.timezone || '-');
   setText('infoCountry', user.country || '-');
   setText('infoCity', user.city || '-');
+  setText('infoRegion', user.region || '-');
   setText('infoDeviceId', deviceId || '-');
   setText('infoFirstSeen', fmtDate(user.first_seen));
-  setText('infoLastActivity', fmtDate(user.last_activity || user.last_seen));
+  setText('infoLastActivity', fmtDate(user.last_heartbeat || user.last_seen));
   setText('infoVersion', user.extension_version || '-');
   await loadUserDataForProfile(deviceId);
 }
@@ -1263,7 +1267,8 @@ function showToast(message, type = 'success') {
 
 // ===== UTILITIES =====
 function isOnline(u) {
-  return new Date(u.last_activity || u.last_seen).getTime() > Date.now() - 5 * 60 * 1000;
+  if (!u.last_heartbeat) return false;
+  return new Date(u.last_heartbeat).getTime() > Date.now() - 2 * 60 * 1000;
 }
 function getInitials(str) {
   if (!str) return '??';
