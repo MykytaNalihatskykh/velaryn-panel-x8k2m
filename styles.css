@@ -1046,4 +1046,5 @@ html[data-theme="light"] .glass-bg {
 .agency-tab-pane { }
 
 .badge.orange { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+.badge.purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 .badge.blue { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
