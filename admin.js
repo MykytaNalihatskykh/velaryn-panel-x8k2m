@@ -6,7 +6,7 @@ const LOGIN_ATTEMPTS_MAX = 5;
 const LOGIN_COOLDOWN_MS = 60000;
 
 // State
-let currentTab = 'users';
+let currentTab = 'agencies';
 let usersData = [];
 let blockedData = [];
 let licenseKeysData = [];
@@ -212,6 +212,7 @@ async function loadData() {
     if (currentTab === 'users' && !currentProfileId) renderUsersTable();
     if (currentTab === 'blocked') renderBlockedTable();
     if (currentTab === 'keys') renderKeysTab();
+    if (currentTab === 'agencies') loadAgencies();
   } catch (error) {
     if (error.name === 'AbortError') return;
     console.error('Failed to load data:', error);
@@ -1398,6 +1399,9 @@ document.getElementById('trackerSort')?.addEventListener('change', renderTracker
 document.querySelectorAll('.nav-item[data-tab]').forEach(n => {
   n.addEventListener('click', () => showTab(n.dataset.tab));
 });
+
+// "Users" shortcut button inside Agencies section
+document.getElementById('goToUsersBtn')?.addEventListener('click', () => showTab('users'));
 
 // Profile tabs
 document.querySelectorAll('.profile-tabs .segmented-btn[data-tab]').forEach(t => {
