@@ -1554,9 +1554,9 @@ document.getElementById('createAgencyBtn')?.addEventListener('click', () => {
       const created = await sbPost('agencies', { name, license_key: key, status: 'active' }, 'return=representation');
       const agencyId = created?.[0]?.id;
       if (agencyId) {
-        const code = generateCodeStr('ADM');
-        await sbPost('agency_codes', { agency_id: agencyId, code, type: 'admin', status: 'unused' });
-        showToast(`Agency created! Admin code: ${code}`, 'success', 15000);
+        const code = generateCodeStr('SPA');
+        await sbPost('agency_codes', { agency_id: agencyId, code, type: 'superadmin', status: 'unused' });
+        showToast(`Agency created! Superadmin code: ${code}`, 'success', 15000);
       } else {
         showToast('Agency created, but could not get ID for admin code', 'warning');
       }
@@ -1613,7 +1613,6 @@ async function openAgencyProfile(id) {
   loadAgencyModelsAdmin(id);
   loadAgencyCodesAdmin(id);
 
-  // Tab switching
   document.querySelectorAll('.agency-profile-tabs .segmented-btn').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.agency-profile-tabs .segmented-btn').forEach(b => b.classList.remove('active'));
@@ -1621,6 +1620,7 @@ async function openAgencyProfile(id) {
       document.querySelectorAll('.agency-tab-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
       const target = document.getElementById('agencyTab' + btn.dataset.agencyTab.charAt(0).toUpperCase() + btn.dataset.agencyTab.slice(1));
       if (target) { target.style.display = 'block'; target.classList.add('active'); }
+      if (btn.dataset.agencyTab === 'stats') loadAgencyStats(id);
     };
   });
 }
@@ -1649,9 +1649,14 @@ async function loadAgencyAccounts(agencyId) {
     }
 
     const tbody = document.getElementById('agencyAccountsTable');
+    const now = Date.now();
     tbody.innerHTML = (accounts || []).map(a => {
       const models = (modelsByAcc[a.id] || []).join(', ') || '—';
-      const devices = devicesByAcc[a.id] || [];
+      const devices = (devicesByAcc[a.id] || []).map(d => {
+        const lastSeenMs = d.last_seen ? new Date(d.last_seen).getTime() : 0;
+        const isStale = (now - lastSeenMs) > 180000;
+        return { ...d, is_online: d.is_online && !isStale };
+      });
       const onlineCount = devices.filter(d => d.is_online).length;
       const onlineBadge = onlineCount > 0
         ? `<span class="badge green">${onlineCount} online</span>`
@@ -1670,7 +1675,7 @@ async function loadAgencyAccounts(agencyId) {
       return `<tr>
         <td>${esc(a.display_name)}</td>
         <td class="mono">${esc(a.username)}</td>
-        <td><span class="badge ${a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
+        <td><span class="badge ${a.role === 'superadmin' ? 'purple' : a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
         <td>${esc(models)}</td>
         <td><span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span></td>
         <td>${onlineBadge}</td>
@@ -1722,7 +1727,7 @@ async function loadAgencyCodesAdmin(agencyId) {
     const tbody = document.getElementById('agencyCodesTable');
     tbody.innerHTML = (codes || []).map(c => `<tr>
       <td class="mono">${esc(c.code)}</td>
-      <td><span class="badge ${c.type === 'admin' ? 'orange' : 'blue'}">${c.type}</span></td>
+      <td><span class="badge ${c.type === 'superadmin' ? 'purple' : c.type === 'admin' ? 'orange' : 'blue'}">${c.type}</span></td>
       <td><span class="badge ${c.status === 'unused' ? 'green' : ''}">${c.status}</span></td>
       <td>${fmtDate(c.created_at)}</td>
       <td><button class="btn-danger glass-pill" onclick="deleteAgencyCode('${c.id}')">Delete</button></td>
@@ -1739,6 +1744,7 @@ async function deleteAgencyCode(codeId) {
     if (accountId) {
       await sbDelete(`agency_account_devices?account_id=eq.${accountId}`);
       await sbDelete(`agency_account_models?account_id=eq.${accountId}`);
+      try { await sbDelete(`agency_notes?account_id=eq.${accountId}`); } catch (_) {}
       await sbDelete(`agency_accounts?id=eq.${accountId}`);
     }
     await sbDelete(`agency_codes?id=eq.${codeId}`);
@@ -1755,6 +1761,7 @@ async function deleteAgencyAccountAdmin(accountId) {
   try {
     await sbDelete(`agency_account_devices?account_id=eq.${accountId}`);
     await sbDelete(`agency_account_models?account_id=eq.${accountId}`);
+    try { await sbDelete(`agency_notes?account_id=eq.${accountId}`); } catch (_) {}
     // Also mark the code as unused if one was used by this account
     try { await sbPatch(`agency_codes?used_by_account_id=eq.${accountId}`, { used_by_account_id: null, status: 'unused', used_at: null }); } catch (_) {}
     await sbDelete(`agency_accounts?id=eq.${accountId}`);
@@ -1766,13 +1773,140 @@ async function deleteAgencyAccountAdmin(accountId) {
 document.getElementById('agencyGenCodeBtn')?.addEventListener('click', async () => {
   if (!currentAgencyId) return;
   const type = document.getElementById('agencyCodeTypeSelect')?.value || 'worker';
-  const code = generateCodeStr(type === 'admin' ? 'ADM' : 'WRK');
+  const prefixMap = { superadmin: 'SPA', admin: 'ADM', worker: 'WRK' };
+  const code = generateCodeStr(prefixMap[type] || 'WRK');
   try {
     await sbPost('agency_codes', { agency_id: currentAgencyId, code, type, status: 'unused' });
     showToast(`Code generated: ${code}`, 'success', 8000);
     loadAgencyCodesAdmin(currentAgencyId);
   } catch (e) { showToast('Failed', 'error'); }
 });
+
+// ===== AGENCY STATS =====
+async function loadAgencyStats(agencyId) {
+  try {
+    const [accounts, transactions, notes, models, activityLog] = await Promise.all([
+      sbGet(`agency_accounts?agency_id=eq.${agencyId}&status=neq.deleted&select=id,display_name,role,device_id,last_seen`),
+      sbGet(`agency_transactions?agency_id=eq.${agencyId}&select=id,account_id,model_id,fan_nick,amount,transaction_date,agency_models:model_id(name),agency_accounts:account_id(display_name)`),
+      sbGet(`agency_notes?agency_id=eq.${agencyId}&select=*,agency_accounts:account_id(display_name),agency_models:model_id(name)&order=updated_at.desc`),
+      sbGet(`agency_models?agency_id=eq.${agencyId}&select=id,name`),
+      sbGet(`agency_activity_log?agency_id=eq.${agencyId}&select=*,agency_accounts:actor_account_id(display_name)&order=created_at.desc&limit=50`)
+    ]);
+
+    const accountIds = (accounts || []).map(a => a.id);
+    let deviceIds = [];
+    if (accountIds.length > 0) {
+      const acFilter = accountIds.map(id => `account_id.eq.${id}`).join(',');
+      const devRows = await sbGet(`agency_account_devices?or=(${acFilter})&select=device_id`);
+      deviceIds = [...new Set((devRows || []).map(d => d.device_id).filter(Boolean))];
+    }
+
+    let usersStats = [];
+    if (deviceIds.length > 0) {
+      const devFilter = deviceIds.map(d => `device_id.eq.${encodeURIComponent(d)}`).join(',');
+      usersStats = await sbGet(`users?or=(${devFilter})&select=device_id,messages_sent,ai_requests,parses_done,last_heartbeat`);
+    }
+    const userStatsByDevice = {};
+    (usersStats || []).forEach(u => { userStatsByDevice[u.device_id] = u; });
+
+    const allTx = transactions || [];
+    let totalSpend = 0;
+    allTx.forEach(t => { totalSpend += Number(t.amount) || 0; });
+
+    let totalMsgs = 0, totalAI = 0, totalParses = 0;
+    Object.values(userStatsByDevice).forEach(u => {
+      totalMsgs += u.messages_sent || 0;
+      totalAI += u.ai_requests || 0;
+      totalParses += u.parses_done || 0;
+    });
+
+    setText('agStatTotalSpend', '$' + totalSpend.toFixed(2));
+    setText('agStatAccounts', (accounts || []).length);
+    setText('agStatMessages', totalMsgs);
+    setText('agStatAI', totalAI);
+    setText('agStatParses', totalParses);
+    setText('agStatTransactions', allTx.length);
+
+    // Spending by Model
+    const byModel = {};
+    allTx.forEach(t => {
+      const mId = t.model_id || 'none';
+      const mName = t.agency_models?.name || 'No model';
+      if (!byModel[mId]) byModel[mId] = { name: mName, total: 0, count: 0, workers: new Set() };
+      byModel[mId].total += Number(t.amount) || 0;
+      byModel[mId].count++;
+      if (t.account_id) byModel[mId].workers.add(t.account_id);
+    });
+
+    const modelTbody = document.getElementById('agencyStatsModelTable');
+    modelTbody.innerHTML = Object.values(byModel).map(m => `<tr>
+      <td>${esc(m.name)}</td>
+      <td>$${m.total.toFixed(2)}</td>
+      <td>${m.count}</td>
+      <td>${m.workers.size}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>';
+
+    // Spending by Worker
+    const byWorker = {};
+    allTx.forEach(t => {
+      const aId = t.account_id || 'unknown';
+      const aName = t.agency_accounts?.display_name || 'Unknown';
+      if (!byWorker[aId]) byWorker[aId] = { name: aName, total: 0, count: 0 };
+      byWorker[aId].total += Number(t.amount) || 0;
+      byWorker[aId].count++;
+    });
+    const accountMap = {};
+    (accounts || []).forEach(a => { accountMap[a.id] = a; });
+
+    const workerTbody = document.getElementById('agencyStatsWorkerTable');
+    const workerRows = (accounts || []).map(a => {
+      const w = byWorker[a.id] || { total: 0, count: 0 };
+      const devRows = Object.entries(userStatsByDevice);
+      let msgs = 0;
+      if (a.device_id && userStatsByDevice[a.device_id]) msgs = userStatsByDevice[a.device_id].messages_sent || 0;
+      return `<tr>
+        <td>${esc(a.display_name)}</td>
+        <td><span class="badge ${a.role === 'superadmin' ? 'purple' : a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
+        <td>$${w.total.toFixed(2)}</td>
+        <td>${w.count}</td>
+        <td>${msgs}</td>
+        <td>${a.last_seen ? fmtDate(a.last_seen) : '—'}</td>
+      </tr>`;
+    });
+    workerTbody.innerHTML = workerRows.join('') || '<tr><td colspan="6" class="empty-row">No accounts</td></tr>';
+
+    // Notes
+    const noteFilter = document.getElementById('agencyStatsNoteFilter');
+    noteFilter.innerHTML = '<option value="">All Models</option>' +
+      (models || []).map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+    noteFilter.onchange = () => renderAgencyNotes(notes || [], noteFilter.value);
+    renderAgencyNotes(notes || [], '');
+
+    const logTbody = document.getElementById('agencyStatsLogTable');
+    logTbody.innerHTML = (activityLog || []).map(l => `<tr>
+      <td>${fmtDate(l.created_at)}</td>
+      <td>${esc(l.agency_accounts?.display_name || '—')}</td>
+      <td>${esc(l.action)}</td>
+      <td>${esc(l.target_type || '—')}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${l.details ? esc(JSON.stringify(l.details)) : '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No activity yet</td></tr>';
+  } catch (e) {
+    console.error('loadAgencyStats error:', e);
+    showToast('Failed to load agency stats', 'error');
+  }
+}
+
+function renderAgencyNotes(notes, filterModelId) {
+  const filtered = filterModelId ? notes.filter(n => n.model_id === filterModelId) : notes;
+  const tbody = document.getElementById('agencyStatsNotesTable');
+  tbody.innerHTML = filtered.map(n => `<tr>
+    <td>${esc(n.agency_accounts?.display_name || 'Unknown')}</td>
+    <td>${esc(n.agency_models?.name || '—')}</td>
+    <td>${esc(n.fan_nick || '—')}</td>
+    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${esc(n.note_text || '')}</td>
+    <td>${fmtDate(n.updated_at)}</td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No notes</td></tr>';
+}
 
 initTheme();
 checkAuth();
