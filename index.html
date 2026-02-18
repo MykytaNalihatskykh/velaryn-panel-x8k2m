@@ -43,7 +43,12 @@
         <span>Velaryn</span>
       </div>
       <nav class="sidebar-nav">
-        <button class="nav-item active" data-tab="users">
+        <button class="nav-item active" data-tab="agencies">
+          <span class="nav-icon">🏢</span>
+          <span class="nav-label">Agencies</span>
+          <span class="nav-hint">Manage agencies</span>
+        </button>
+        <button class="nav-item" data-tab="users">
           <span class="nav-icon">👥</span>
           <span class="nav-label">Users</span>
           <span class="nav-hint">Manage access</span>
@@ -57,11 +62,6 @@
           <span class="nav-icon">🔑</span>
           <span class="nav-label">Licenses</span>
           <span class="nav-hint">Keys & activation</span>
-        </button>
-        <button class="nav-item" data-tab="agencies">
-          <span class="nav-icon">🏢</span>
-          <span class="nav-label">Agencies</span>
-          <span class="nav-hint">Manage agencies</span>
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -85,8 +85,8 @@
 
       <!-- Page Header -->
       <header class="page-header">
-        <h1 id="pageTitle">Users</h1>
-        <p id="pageDesc" class="page-desc">View and manage all registered devices. Group by IP or see individual devices.</p>
+        <h1 id="pageTitle">Agencies</h1>
+        <p id="pageDesc" class="page-desc">Create and manage agencies, generate codes, control access.</p>
       </header>
 
       <!-- Stats — Glass Cards -->
@@ -114,7 +114,7 @@
       </section>
 
       <!-- USERS SECTION -->
-      <section id="usersSection" class="content-section">
+      <section id="usersSection" class="content-section" style="display:none;">
         <div class="section-card glass-card">
           <div class="section-toolbar">
             <div class="toolbar-left">
@@ -243,7 +243,7 @@
       </section>
 
       <!-- AGENCIES SECTION -->
-      <section id="agenciesSection" class="content-section" style="display:none;">
+      <section id="agenciesSection" class="content-section">
         <div class="section-header">
           <h2>Agencies</h2>
           <p class="section-desc">Create and manage agencies, generate invitation codes, and control access.</p>
@@ -251,6 +251,7 @@
         <div class="agencies-toolbar glass-bar">
           <button class="btn-primary glass-pill" id="createAgencyBtn">+ New Agency</button>
           <input type="text" id="agenciesSearch" class="search-input glass-input" placeholder="Search agencies...">
+          <button class="btn-secondary glass-pill" id="goToUsersBtn" style="margin-left:auto;">👥 Users</button>
         </div>
         <div id="agenciesList" class="agencies-grid"></div>
 
