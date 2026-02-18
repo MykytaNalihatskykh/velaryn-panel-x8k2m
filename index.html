@@ -58,6 +58,11 @@
           <span class="nav-label">Licenses</span>
           <span class="nav-hint">Keys & activation</span>
         </button>
+        <button class="nav-item" data-tab="agencies">
+          <span class="nav-icon">🏢</span>
+          <span class="nav-label">Agencies</span>
+          <span class="nav-hint">Manage agencies</span>
+        </button>
       </nav>
       <div class="sidebar-footer">
         <div class="theme-toggle-wrap glass-pill">
@@ -233,6 +238,78 @@
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AGENCIES SECTION -->
+      <section id="agenciesSection" class="content-section" style="display:none;">
+        <div class="section-header">
+          <h2>Agencies</h2>
+          <p class="section-desc">Create and manage agencies, generate invitation codes, and control access.</p>
+        </div>
+        <div class="agencies-toolbar glass-bar">
+          <button class="btn-primary glass-pill" id="createAgencyBtn">+ New Agency</button>
+          <input type="text" id="agenciesSearch" class="search-input glass-input" placeholder="Search agencies...">
+        </div>
+        <div id="agenciesList" class="agencies-grid"></div>
+
+        <!-- Agency Profile -->
+        <div id="agencyProfile" class="section-card glass-card" style="display:none;">
+          <div class="agency-profile-header">
+            <h3 id="agencyProfileName">Agency Name</h3>
+            <div class="agency-profile-status" id="agencyProfileStatus">active</div>
+            <div class="agency-profile-actions">
+              <button class="btn-warning glass-pill" id="toggleAgencyBanBtn">Ban</button>
+              <button class="btn-danger glass-pill" id="deleteAgencyBtn">Delete</button>
+              <button class="btn-secondary glass-pill" id="closeAgencyProfile">Close</button>
+            </div>
+          </div>
+
+          <div class="agency-profile-tabs segmented-control glass-pill">
+            <button class="segmented-btn active" data-agency-tab="accounts">Accounts</button>
+            <button class="segmented-btn" data-agency-tab="models">Models</button>
+            <button class="segmented-btn" data-agency-tab="codes">Codes</button>
+            <button class="segmented-btn" data-agency-tab="stats">Stats</button>
+          </div>
+
+          <div class="agency-tab-pane active" id="agencyTabAccounts">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Models</th><th>Status</th><th>Online</th><th>Last seen</th><th>Limits</th></tr></thead>
+                <tbody id="agencyAccountsTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="agency-tab-pane" id="agencyTabModels" style="display:none;">
+            <div class="toolbar-right" style="margin-bottom:12px;">
+              <input type="text" id="agencyNewModelName" class="search-input glass-input" placeholder="Model name">
+              <button class="btn-primary glass-pill" id="agencyAddModelBtn">Add Model</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Name</th><th>Created</th><th class="col-actions">Actions</th></tr></thead>
+                <tbody id="agencyModelsTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="agency-tab-pane" id="agencyTabCodes" style="display:none;">
+            <div class="toolbar-right" style="margin-bottom:12px;">
+              <select id="agencyCodeTypeSelect" class="page-size-select"><option value="admin">Admin</option><option value="worker">Worker</option></select>
+              <button class="btn-primary glass-pill" id="agencyGenCodeBtn">Generate Code</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Code</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody id="agencyCodesTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="agency-tab-pane" id="agencyTabStats" style="display:none;">
+            <div class="profile-stats" id="agencyStatsGrid"></div>
           </div>
         </div>
       </section>
