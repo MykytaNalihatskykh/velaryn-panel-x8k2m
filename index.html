@@ -45,10 +45,6 @@
           <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M3 7v14M21 7v14M6 21V10M10 21V10M14 21V10M18 21V10M3 7l9-4 9 4M6 10h12"/></svg></span>
           <span class="nav-label">Agencies</span>
         </button>
-        <button class="nav-item" data-tab="users">
-          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span class="nav-label">Users</span>
-        </button>
         <button class="nav-item" data-tab="blocked">
           <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
           <span class="nav-label">Blocked</span>
@@ -331,6 +327,22 @@
               <table class="data-table">
                 <thead><tr><th>Worker</th><th>Role</th><th>Spending</th><th>Transactions</th><th>Messages</th><th>Last Active</th></tr></thead>
                 <tbody id="agencyStatsWorkerTable"></tbody>
+              </table>
+            </div>
+
+            <h4 style="margin:20px 0 8px;">Tracker (by Fan)</h4>
+            <div class="table-wrap" style="max-height:280px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Fan</th><th>Model</th><th>Spent</th><th>Txns</th><th>Note</th><th>Last payment</th></tr></thead>
+                <tbody id="agencyStatsFanTable"></tbody>
+              </table>
+            </div>
+
+            <h4 style="margin:20px 0 8px;">Recent Transactions</h4>
+            <div class="table-wrap" style="max-height:200px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Fan</th><th>Amount</th><th>Model</th><th>Date</th></tr></thead>
+                <tbody id="agencyStatsRecentTxTable"></tbody>
               </table>
             </div>
 
