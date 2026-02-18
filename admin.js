@@ -1523,7 +1523,7 @@ function renderAgenciesList() {
   const filtered = q ? agenciesData.filter(a => a.name.toLowerCase().includes(q)) : agenciesData;
 
   container.innerHTML = filtered.map(a => `
-    <div class="agency-card glass-card" data-id="${a.id}">
+    <div class="agency-card" data-id="${a.id}">
       <div class="agency-card-header">
         <h3>${esc(a.name)}</h3>
         <span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span>
@@ -1533,9 +1533,9 @@ function renderAgenciesList() {
         ${a.license_key ? `<span>Key: ${esc(a.license_key).slice(0, 12)}...</span>` : ''}
       </div>
       <div class="agency-card-actions">
-        <button class="btn-secondary glass-pill" onclick="openAgencyProfile('${a.id}')">View</button>
-        <button class="btn-warning glass-pill" onclick="toggleAgencyBan('${a.id}', '${a.status}')">${a.status === 'active' ? 'Ban' : 'Unban'}</button>
-        <button class="btn-danger glass-pill" onclick="deleteAgency('${a.id}')">Delete</button>
+        <button class="btn-secondary" onclick="openAgencyProfile('${a.id}')">View</button>
+        <button class="btn-warning" onclick="toggleAgencyBan('${a.id}', '${a.status}')">${a.status === 'active' ? 'Ban' : 'Unban'}</button>
+        <button class="btn-danger" onclick="deleteAgency('${a.id}')">Delete</button>
       </div>
     </div>
   `).join('') || '<p class="empty-row">No agencies yet. Create one to get started.</p>';
@@ -1686,7 +1686,7 @@ async function loadAgencyAccounts(agencyId) {
         <td>${lastSeen}</td>
         <td>${limits}</td>
         <td style="font-size:11px">${deviceDetails}</td>
-        <td><button class="btn-danger glass-pill" onclick="deleteAgencyAccountAdmin('${a.id}')">Delete</button></td>
+        <td><button class="btn-danger" onclick="deleteAgencyAccountAdmin('${a.id}')">Delete</button></td>
       </tr>`;
     }).join('') || '<tr><td colspan="10" class="empty-row">No accounts</td></tr>';
   } catch (e) { showToast('Failed to load accounts', 'error'); }
@@ -1699,7 +1699,7 @@ async function loadAgencyModelsAdmin(agencyId) {
     tbody.innerHTML = (models || []).map(m => `<tr>
       <td>${esc(m.name)}</td>
       <td>${fmtDate(m.created_at)}</td>
-      <td><button class="btn-danger glass-pill" onclick="deleteAgencyModelAdmin('${m.id}')">Delete</button></td>
+      <td><button class="btn-danger" onclick="deleteAgencyModelAdmin('${m.id}')">Delete</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No models</td></tr>';
   } catch (e) { /* silent */ }
 }
@@ -1734,7 +1734,7 @@ async function loadAgencyCodesAdmin(agencyId) {
       <td><span class="badge ${c.type === 'superadmin' ? 'purple' : c.type === 'admin' ? 'orange' : 'blue'}">${c.type}</span></td>
       <td><span class="badge ${c.status === 'unused' ? 'green' : ''}">${c.status}</span></td>
       <td>${fmtDate(c.created_at)}</td>
-      <td><button class="btn-danger glass-pill" onclick="deleteAgencyCode('${c.id}')">Delete</button></td>
+      <td><button class="btn-danger" onclick="deleteAgencyCode('${c.id}')">Delete</button></td>
     </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No codes</td></tr>';
   } catch (e) { /* silent */ }
 }
