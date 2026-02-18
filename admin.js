@@ -1724,8 +1724,18 @@ async function loadAgencyCodesAdmin(agencyId) {
       <td><span class="badge ${c.type === 'admin' ? 'orange' : 'blue'}">${c.type}</span></td>
       <td><span class="badge ${c.status === 'unused' ? 'green' : ''}">${c.status}</span></td>
       <td>${fmtDate(c.created_at)}</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No codes</td></tr>';
+      <td><button class="btn-danger glass-pill" onclick="deleteAgencyCode('${c.id}')">Delete</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No codes</td></tr>';
   } catch (e) { /* silent */ }
+}
+
+async function deleteAgencyCode(codeId) {
+  if (!confirm('Delete this code?')) return;
+  try {
+    await sbDelete(`agency_codes?id=eq.${codeId}`);
+    showToast('Code deleted', 'success');
+    if (currentAgencyId) loadAgencyCodesAdmin(currentAgencyId);
+  } catch (e) { showToast('Failed to delete code', 'error'); }
 }
 
 document.getElementById('agencyGenCodeBtn')?.addEventListener('click', async () => {
