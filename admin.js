@@ -1879,6 +1879,50 @@ async function loadAgencyStats(agencyId) {
     });
     workerTbody.innerHTML = workerRows.join('') || '<tr><td colspan="6" class="empty-row">No accounts</td></tr>';
 
+    // Tracker by Fan (fan + model level)
+    const byFan = {};
+    const notesByFanModel = {};
+    (notes || []).forEach(n => {
+      const key = `${(n.fan_nick || '').toLowerCase()}::${n.model_id || 'none'}`;
+      notesByFanModel[key] = n.note_text || '';
+    });
+    allTx.forEach(t => {
+      const fan = t.fan_nick || 'Unknown';
+      const mId = t.model_id || 'none';
+      const mName = t.agency_models?.name || 'No model';
+      const key = `${fan.toLowerCase()}::${mId}`;
+      if (!byFan[key]) byFan[key] = { fan, modelId: mId, modelName: mName, total: 0, count: 0, lastPayment: null, lastAmount: 0 };
+      const r = byFan[key];
+      r.total += Number(t.amount) || 0;
+      r.count++;
+      const d = t.transaction_date;
+      if (d && (!r.lastPayment || d > r.lastPayment)) { r.lastPayment = d; r.lastAmount = Number(t.amount) || 0; }
+    });
+    const fanRows = Object.values(byFan).sort((a, b) => b.total - a.total);
+    fanRows.forEach(r => {
+      const noteKey = `${r.fan.toLowerCase()}::${r.modelId}`;
+      r.note = notesByFanModel[noteKey] || notesByFanModel[`${r.fan.toLowerCase()}::none`] || '';
+    });
+    const fanTbody = document.getElementById('agencyStatsFanTable');
+    fanTbody.innerHTML = fanRows.map(r => `<tr>
+      <td>${esc(r.fan)}</td>
+      <td>${esc(r.modelName)}</td>
+      <td>$${r.total.toFixed(2)}</td>
+      <td>${r.count}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">${esc(r.note || '-')}</td>
+      <td>${r.lastPayment ? fmtDate(r.lastPayment) + ' ($' + r.lastAmount.toFixed(2) + ')' : '—'}</td>
+    </tr>`).join('') || '<tr><td colspan="6" class="empty-row">No transactions yet</td></tr>';
+
+    // Recent Transactions (last 20)
+    const recentTx = [...allTx].sort((a, b) => new Date(b.transaction_date || 0) - new Date(a.transaction_date || 0)).slice(0, 20);
+    const recentTbody = document.getElementById('agencyStatsRecentTxTable');
+    recentTbody.innerHTML = recentTx.map(t => `<tr>
+      <td>${esc(t.fan_nick || '—')}</td>
+      <td>$${Number(t.amount || 0).toFixed(2)}</td>
+      <td>${esc(t.agency_models?.name || '—')}</td>
+      <td>${fmtDate(t.transaction_date)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No transactions yet</td></tr>';
+
     // Notes
     const noteFilter = document.getElementById('agencyStatsNoteFilter');
     noteFilter.innerHTML = '<option value="">All Models</option>' +
