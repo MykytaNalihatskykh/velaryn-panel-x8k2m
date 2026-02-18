@@ -120,38 +120,55 @@ function stopAutoRefresh() {
 }
 
 // ===== SUPABASE HELPERS =====
+// If you have a service_role key, set it here for full write access:
+const SUPABASE_SERVICE_KEY = null; // e.g. 'eyJ...' — set this if anon key gets 401
+
 function sbHeaders() {
-  return { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+  const key = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+  return { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${key}` };
 }
-function sbHeadersWrite() {
-  return { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+function sbHeadersWrite(prefer) {
+  return { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': prefer || 'return=minimal' };
 }
 
 async function sbGet(path) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders() });
-  if (!r.ok) throw new Error(`GET ${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`GET ${path} failed: ${r.status} ${t}`);
+  }
   return r.json();
 }
 
-async function sbPost(path, data) {
+async function sbPost(path, data, prefer) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: 'POST', headers: sbHeadersWrite(), body: JSON.stringify(data)
+    method: 'POST', headers: sbHeadersWrite(prefer), body: JSON.stringify(data)
   });
-  if (!r.ok) throw new Error(`POST ${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`POST ${path} failed: ${r.status} ${t}`);
+  }
+  if (prefer === 'return=representation') return r.json();
 }
 
 async function sbPatch(path, data) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method: 'PATCH', headers: sbHeadersWrite(), body: JSON.stringify(data)
   });
-  if (!r.ok) throw new Error(`PATCH ${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`PATCH ${path} failed: ${r.status} ${t}`);
+  }
 }
 
 async function sbDelete(path) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method: 'DELETE', headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }
   });
-  if (!r.ok) throw new Error(`DELETE ${path} failed: ${r.status}`);
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`DELETE ${path} failed: ${r.status} ${t}`);
+  }
 }
 
 async function loadWithRetry(fn, retries = 3) {
@@ -1534,24 +1551,11 @@ document.getElementById('createAgencyBtn')?.addEventListener('click', () => {
     if (!name) { showToast('Enter a name', 'error'); return; }
     const key = document.getElementById('newAgencyKey')?.value.trim() || autoKey;
     try {
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/agencies`, {
-        method: 'POST',
-        headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-        body: JSON.stringify({ name, license_key: key, status: 'active' })
-      });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`${resp.status}: ${errText}`);
-      }
-      const created = await resp.json();
-      const agencyId = created[0]?.id;
+      const created = await sbPost('agencies', { name, license_key: key, status: 'active' }, 'return=representation');
+      const agencyId = created?.[0]?.id;
       if (agencyId) {
         const code = generateCodeStr('ADM');
-        await fetch(`${SUPABASE_URL}/rest/v1/agency_codes`, {
-          method: 'POST',
-          headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ agency_id: agencyId, code, type: 'admin', status: 'unused' })
-        });
+        await sbPost('agency_codes', { agency_id: agencyId, code, type: 'admin', status: 'unused' });
         showToast(`Agency created! Admin code: ${code}`, 'success', 15000);
       } else {
         showToast('Agency created, but could not get ID for admin code', 'warning');
@@ -1632,22 +1636,49 @@ async function loadAgencyAccounts(agencyId) {
       modelsByAcc[m.account_id].push(m.agency_models.name);
     });
 
+    // Fetch per-device sessions (multi-device support)
+    const accountIds = (accounts || []).map(a => a.id);
+    let devicesByAcc = {};
+    if (accountIds.length > 0) {
+      const acFilter = accountIds.map(id => `account_id.eq.${id}`).join(',');
+      const devRows = await sbGet(`agency_account_devices?or=(${acFilter})&select=account_id,device_id,model_id,is_online,last_seen,agency_models:model_id(name)`);
+      (devRows || []).forEach(d => {
+        if (!devicesByAcc[d.account_id]) devicesByAcc[d.account_id] = [];
+        devicesByAcc[d.account_id].push(d);
+      });
+    }
+
     const tbody = document.getElementById('agencyAccountsTable');
     tbody.innerHTML = (accounts || []).map(a => {
       const models = (modelsByAcc[a.id] || []).join(', ') || '—';
-      const online = a.is_online ? '<span class="badge green">Online</span>' : '<span class="badge">Offline</span>';
+      const devices = devicesByAcc[a.id] || [];
+      const onlineCount = devices.filter(d => d.is_online).length;
+      const onlineBadge = onlineCount > 0
+        ? `<span class="badge green">${onlineCount} online</span>`
+        : '<span class="badge">Offline</span>';
+      const deviceDetails = devices.length > 0
+        ? devices.map(d => {
+            const dStatus = d.is_online ? '🟢' : '⚫';
+            const dModel = d.agency_models?.name || '—';
+            return `${dStatus} ${esc(dModel)}`;
+          }).join('<br>')
+        : '—';
       const limits = a.role === 'worker' ? `S:${a.daily_send_limit ?? '∞'} AI:${a.daily_ai_limit ?? '∞'} P:${a.daily_parse_limit ?? '∞'}` : '—';
+      const lastSeen = devices.length > 0
+        ? fmtDate(devices.reduce((latest, d) => (!latest || (d.last_seen && d.last_seen > latest) ? d.last_seen : latest), null) || a.last_seen)
+        : (a.last_seen ? fmtDate(a.last_seen) : '—');
       return `<tr>
         <td>${esc(a.display_name)}</td>
         <td class="mono">${esc(a.username)}</td>
         <td><span class="badge ${a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
         <td>${esc(models)}</td>
         <td><span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span></td>
-        <td>${online}</td>
-        <td>${a.last_seen ? fmtDate(a.last_seen) : '—'}</td>
+        <td>${onlineBadge}</td>
+        <td>${lastSeen}</td>
         <td>${limits}</td>
+        <td style="font-size:11px">${deviceDetails}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" class="empty-row">No accounts</td></tr>';
+    }).join('') || '<tr><td colspan="9" class="empty-row">No accounts</td></tr>';
   } catch (e) { showToast('Failed to load accounts', 'error'); }
 }
 
