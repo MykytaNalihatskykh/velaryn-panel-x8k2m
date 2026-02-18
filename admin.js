@@ -1677,8 +1677,9 @@ async function loadAgencyAccounts(agencyId) {
         <td>${lastSeen}</td>
         <td>${limits}</td>
         <td style="font-size:11px">${deviceDetails}</td>
+        <td><button class="btn-danger glass-pill" onclick="deleteAgencyAccountAdmin('${a.id}')">Delete</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="9" class="empty-row">No accounts</td></tr>';
+    }).join('') || '<tr><td colspan="10" class="empty-row">No accounts</td></tr>';
   } catch (e) { showToast('Failed to load accounts', 'error'); }
 }
 
@@ -1730,12 +1731,36 @@ async function loadAgencyCodesAdmin(agencyId) {
 }
 
 async function deleteAgencyCode(codeId) {
-  if (!confirm('Delete this code?')) return;
+  if (!confirm('Delete this code? If an account was registered with it, that account will also be deleted.')) return;
   try {
+    // Find and delete the account registered with this code
+    const codes = await sbGet(`agency_codes?id=eq.${codeId}&select=used_by_account_id`);
+    const accountId = codes?.[0]?.used_by_account_id;
+    if (accountId) {
+      await sbDelete(`agency_account_devices?account_id=eq.${accountId}`);
+      await sbDelete(`agency_account_models?account_id=eq.${accountId}`);
+      await sbDelete(`agency_accounts?id=eq.${accountId}`);
+    }
     await sbDelete(`agency_codes?id=eq.${codeId}`);
-    showToast('Code deleted', 'success');
-    if (currentAgencyId) loadAgencyCodesAdmin(currentAgencyId);
-  } catch (e) { showToast('Failed to delete code', 'error'); }
+    showToast('Code and associated account deleted', 'success');
+    if (currentAgencyId) {
+      loadAgencyCodesAdmin(currentAgencyId);
+      loadAgencyAccounts(currentAgencyId);
+    }
+  } catch (e) { showToast('Failed to delete code: ' + (e.message || e), 'error'); }
+}
+
+async function deleteAgencyAccountAdmin(accountId) {
+  if (!confirm('Delete this account? This cannot be undone.')) return;
+  try {
+    await sbDelete(`agency_account_devices?account_id=eq.${accountId}`);
+    await sbDelete(`agency_account_models?account_id=eq.${accountId}`);
+    // Also mark the code as unused if one was used by this account
+    try { await sbPatch(`agency_codes?used_by_account_id=eq.${accountId}`, { used_by_account_id: null, status: 'unused', used_at: null }); } catch (_) {}
+    await sbDelete(`agency_accounts?id=eq.${accountId}`);
+    showToast('Account deleted', 'success');
+    if (currentAgencyId) loadAgencyAccounts(currentAgencyId);
+  } catch (e) { showToast('Failed to delete account: ' + (e.message || e), 'error'); }
 }
 
 document.getElementById('agencyGenCodeBtn')?.addEventListener('click', async () => {
