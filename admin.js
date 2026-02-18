@@ -237,8 +237,10 @@ function showTab(tab) {
   setDisplay('usersSection', tab === 'users' ? 'block' : 'none');
   setDisplay('blockedSection', tab === 'blocked' ? 'block' : 'none');
   setDisplay('keysSection', tab === 'keys' ? 'block' : 'none');
-  const titles = { users: 'Users', blocked: 'Blocked IPs', keys: 'Licenses' };
-  const descs = { users: 'View and manage all registered devices. Group by IP or see individual devices.', blocked: 'IP addresses that are denied access to the extension.', keys: 'Generate and manage license keys for users.' };
+  setDisplay('agenciesSection', tab === 'agencies' ? 'block' : 'none');
+  if (tab === 'agencies') loadAgencies();
+  const titles = { users: 'Users', blocked: 'Blocked IPs', keys: 'Licenses', agencies: 'Agencies' };
+  const descs = { users: 'View and manage all registered devices. Group by IP or see individual devices.', blocked: 'IP addresses that are denied access to the extension.', keys: 'Generate and manage license keys for users.', agencies: 'Create and manage agencies, generate codes, control access.' };
   setText('pageTitle', titles[tab] || 'Dashboard');
   const descEl = document.getElementById('pageDesc');
   if (descEl) descEl.textContent = descs[tab] || '';
@@ -1256,13 +1258,13 @@ function closeModal() {
 }
 
 // ===== TOAST =====
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', durationMs = 3000) {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span><span>${esc(message)}</span>`;
   c.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), durationMs);
 }
 
 // ===== UTILITIES =====
@@ -1480,6 +1482,215 @@ document.querySelector('.main')?.addEventListener('click', (e) => {
   if (window.innerWidth <= 600 && document.querySelector('.sidebar.open') && !e.target.closest('.sidebar')) {
     document.querySelector('.sidebar')?.classList.remove('open');
   }
+});
+
+// ===== AGENCIES =====
+let agenciesData = [];
+let currentAgencyId = null;
+
+async function loadAgencies() {
+  try {
+    const resp = await sbGet('agencies?select=*&order=created_at.desc');
+    agenciesData = resp || [];
+    renderAgenciesList();
+  } catch (e) { showToast('Failed to load agencies', 'error'); }
+}
+
+function renderAgenciesList() {
+  const container = document.getElementById('agenciesList');
+  const q = (document.getElementById('agenciesSearch')?.value || '').toLowerCase();
+  const filtered = q ? agenciesData.filter(a => a.name.toLowerCase().includes(q)) : agenciesData;
+
+  container.innerHTML = filtered.map(a => `
+    <div class="agency-card glass-card" data-id="${a.id}">
+      <div class="agency-card-header">
+        <h3>${esc(a.name)}</h3>
+        <span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span>
+      </div>
+      <div class="agency-card-meta">
+        <span>Created: ${fmtDate(a.created_at)}</span>
+        ${a.license_key ? `<span>Key: ${esc(a.license_key).slice(0, 12)}...</span>` : ''}
+      </div>
+      <div class="agency-card-actions">
+        <button class="btn-secondary glass-pill" onclick="openAgencyProfile('${a.id}')">View</button>
+        <button class="btn-warning glass-pill" onclick="toggleAgencyBan('${a.id}', '${a.status}')">${a.status === 'active' ? 'Ban' : 'Unban'}</button>
+        <button class="btn-danger glass-pill" onclick="deleteAgency('${a.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('') || '<p class="empty-row">No agencies yet. Create one to get started.</p>';
+}
+
+document.getElementById('agenciesSearch')?.addEventListener('input', renderAgenciesList);
+
+document.getElementById('createAgencyBtn')?.addEventListener('click', () => {
+  openModal('Create Agency', `
+    <label>Agency Name</label>
+    <input type="text" id="newAgencyName" class="search-input glass-input" placeholder="Agency name" style="width:100%;margin-bottom:8px;">
+    <label>License Key (optional)</label>
+    <input type="text" id="newAgencyKey" class="search-input glass-input" placeholder="VLR-XXXX-XXXX-XXXX" style="width:100%;">
+  `, async () => {
+    const name = document.getElementById('newAgencyName')?.value.trim();
+    if (!name) { showToast('Enter a name', 'error'); return; }
+    const key = document.getElementById('newAgencyKey')?.value.trim() || null;
+    try {
+      await sbPost('agencies', { name, license_key: key, status: 'active' });
+      const agencies = await sbGet(`agencies?name=eq.${encodeURIComponent(name)}&select=id`);
+      if (agencies && agencies[0]) {
+        // Generate first admin code
+        const code = generateCodeStr('ADM');
+        await sbPost('agency_codes', { agency_id: agencies[0].id, code, type: 'admin', status: 'unused' });
+        showToast(`Agency created! Admin code: ${code}`, 'success', 10000);
+      }
+      closeModal();
+      loadAgencies();
+    } catch (e) { showToast('Failed to create agency: ' + (e.message || e), 'error'); }
+  });
+});
+
+function generateCodeStr(prefix) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${prefix}-${seg()}-${seg()}-${seg()}`;
+}
+
+async function toggleAgencyBan(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'banned' : 'active';
+  const patch = { status: newStatus };
+  if (newStatus === 'banned') patch.banned_at = new Date().toISOString();
+  try {
+    await sbPatch(`agencies?id=eq.${id}`, patch);
+    showToast(`Agency ${newStatus === 'banned' ? 'banned' : 'unbanned'}`, 'success');
+    loadAgencies();
+    if (currentAgencyId === id) openAgencyProfile(id);
+  } catch (e) { showToast('Failed to update agency', 'error'); }
+}
+
+async function deleteAgency(id) {
+  if (!confirm('Delete this agency and ALL its accounts, models, and codes? This cannot be undone!')) return;
+  try {
+    await sbDelete(`agencies?id=eq.${id}`);
+    showToast('Agency deleted', 'success');
+    currentAgencyId = null;
+    setDisplay('agencyProfile', 'none');
+    loadAgencies();
+  } catch (e) { showToast('Failed to delete agency', 'error'); }
+}
+
+async function openAgencyProfile(id) {
+  currentAgencyId = id;
+  const agency = agenciesData.find(a => a.id === id);
+  if (!agency) return;
+
+  setText('agencyProfileName', agency.name);
+  document.getElementById('agencyProfileStatus').textContent = agency.status;
+  document.getElementById('agencyProfileStatus').className = `agency-profile-status badge ${agency.status === 'active' ? 'green' : 'red'}`;
+  document.getElementById('toggleAgencyBanBtn').textContent = agency.status === 'active' ? 'Ban' : 'Unban';
+  document.getElementById('toggleAgencyBanBtn').onclick = () => toggleAgencyBan(id, agency.status);
+  document.getElementById('deleteAgencyBtn').onclick = () => deleteAgency(id);
+  document.getElementById('closeAgencyProfile').onclick = () => { setDisplay('agencyProfile', 'none'); currentAgencyId = null; };
+
+  setDisplay('agencyProfile', 'block');
+  loadAgencyAccounts(id);
+  loadAgencyModelsAdmin(id);
+  loadAgencyCodesAdmin(id);
+
+  // Tab switching
+  document.querySelectorAll('.agency-profile-tabs .segmented-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.agency-profile-tabs .segmented-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.agency-tab-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
+      const target = document.getElementById('agencyTab' + btn.dataset.agencyTab.charAt(0).toUpperCase() + btn.dataset.agencyTab.slice(1));
+      if (target) { target.style.display = 'block'; target.classList.add('active'); }
+    };
+  });
+}
+
+async function loadAgencyAccounts(agencyId) {
+  try {
+    const accounts = await sbGet(`agency_accounts?agency_id=eq.${agencyId}&status=neq.deleted&select=*&order=created_at.asc`);
+    const allModels = await sbGet(`agency_account_models?select=account_id,agency_models:model_id(name)`);
+    const modelsByAcc = {};
+    (allModels || []).forEach(m => {
+      if (!m.agency_models) return;
+      if (!modelsByAcc[m.account_id]) modelsByAcc[m.account_id] = [];
+      modelsByAcc[m.account_id].push(m.agency_models.name);
+    });
+
+    const tbody = document.getElementById('agencyAccountsTable');
+    tbody.innerHTML = (accounts || []).map(a => {
+      const models = (modelsByAcc[a.id] || []).join(', ') || '—';
+      const online = a.is_online ? '<span class="badge green">Online</span>' : '<span class="badge">Offline</span>';
+      const limits = a.role === 'worker' ? `S:${a.daily_send_limit ?? '∞'} AI:${a.daily_ai_limit ?? '∞'} P:${a.daily_parse_limit ?? '∞'}` : '—';
+      return `<tr>
+        <td>${esc(a.display_name)}</td>
+        <td class="mono">${esc(a.username)}</td>
+        <td><span class="badge ${a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
+        <td>${esc(models)}</td>
+        <td><span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span></td>
+        <td>${online}</td>
+        <td>${a.last_seen ? fmtDate(a.last_seen) : '—'}</td>
+        <td>${limits}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8" class="empty-row">No accounts</td></tr>';
+  } catch (e) { showToast('Failed to load accounts', 'error'); }
+}
+
+async function loadAgencyModelsAdmin(agencyId) {
+  try {
+    const models = await sbGet(`agency_models?agency_id=eq.${agencyId}&select=*&order=created_at.asc`);
+    const tbody = document.getElementById('agencyModelsTable');
+    tbody.innerHTML = (models || []).map(m => `<tr>
+      <td>${esc(m.name)}</td>
+      <td>${fmtDate(m.created_at)}</td>
+      <td><button class="btn-danger glass-pill" onclick="deleteAgencyModelAdmin('${m.id}')">Delete</button></td>
+    </tr>`).join('') || '<tr><td colspan="3" class="empty-row">No models</td></tr>';
+  } catch (e) { /* silent */ }
+}
+
+async function deleteAgencyModelAdmin(modelId) {
+  if (!confirm('Delete this model?')) return;
+  try {
+    await sbDelete(`agency_models?id=eq.${modelId}`);
+    showToast('Model deleted', 'success');
+    if (currentAgencyId) loadAgencyModelsAdmin(currentAgencyId);
+  } catch (e) { showToast('Failed', 'error'); }
+}
+
+document.getElementById('agencyAddModelBtn')?.addEventListener('click', async () => {
+  if (!currentAgencyId) return;
+  const name = document.getElementById('agencyNewModelName')?.value.trim();
+  if (!name) { showToast('Enter model name', 'error'); return; }
+  try {
+    await sbPost('agency_models', { agency_id: currentAgencyId, name });
+    document.getElementById('agencyNewModelName').value = '';
+    showToast('Model added', 'success');
+    loadAgencyModelsAdmin(currentAgencyId);
+  } catch (e) { showToast('Failed', 'error'); }
+});
+
+async function loadAgencyCodesAdmin(agencyId) {
+  try {
+    const codes = await sbGet(`agency_codes?agency_id=eq.${agencyId}&select=*&order=created_at.desc`);
+    const tbody = document.getElementById('agencyCodesTable');
+    tbody.innerHTML = (codes || []).map(c => `<tr>
+      <td class="mono">${esc(c.code)}</td>
+      <td><span class="badge ${c.type === 'admin' ? 'orange' : 'blue'}">${c.type}</span></td>
+      <td><span class="badge ${c.status === 'unused' ? 'green' : ''}">${c.status}</span></td>
+      <td>${fmtDate(c.created_at)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty-row">No codes</td></tr>';
+  } catch (e) { /* silent */ }
+}
+
+document.getElementById('agencyGenCodeBtn')?.addEventListener('click', async () => {
+  if (!currentAgencyId) return;
+  const type = document.getElementById('agencyCodeTypeSelect')?.value || 'worker';
+  const code = generateCodeStr(type === 'admin' ? 'ADM' : 'WRK');
+  try {
+    await sbPost('agency_codes', { agency_id: currentAgencyId, code, type, status: 'unused' });
+    showToast(`Code generated: ${code}`, 'success', 8000);
+    loadAgencyCodesAdmin(currentAgencyId);
+  } catch (e) { showToast('Failed', 'error'); }
 });
 
 initTheme();
