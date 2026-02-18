@@ -12,31 +12,29 @@
 </head>
 <body>
 
-  <!-- LOGIN — Liquid Glass Card -->
+  <!-- LOGIN -->
   <div id="loginScreen" class="screen">
-    <div class="glass-bg"></div>
-    <div class="theme-toggle-login glass-pill">
+    <div class="theme-toggle-login">
       <select id="themeSelectLogin" class="theme-select" aria-label="Theme">
         <option value="system">System</option>
         <option value="light">Light</option>
         <option value="dark">Dark</option>
       </select>
     </div>
-    <div class="login-card glass-card">
+    <div class="login-card">
       <div class="login-logo"><img src="logo.png" alt="Velaryn"></div>
       <h1 class="login-title">Velaryn Admin</h1>
-      <p class="login-desc">Manage users, licenses, and access control</p>
-      <input type="password" id="passwordInput" class="login-input glass-input" placeholder="Enter password" autocomplete="current-password">
+      <p class="login-desc">Manage agencies, users, and access control</p>
+      <input type="password" id="passwordInput" class="login-input" placeholder="Enter password" autocomplete="current-password">
       <div id="loginError" class="login-error"></div>
-      <button onclick="login()" class="login-btn glass-cta" id="loginBtn">Continue</button>
+      <button onclick="login()" class="login-btn" id="loginBtn">Continue</button>
     </div>
   </div>
 
   <!-- DASHBOARD -->
   <div id="dashboard" class="dashboard">
-    <div class="glass-bg"></div>
 
-    <!-- Sidebar — Glass Panel -->
+    <!-- Sidebar -->
     <aside class="sidebar glass-panel">
       <div class="sidebar-brand">
         <img src="logo.png" alt="Velaryn">
@@ -44,28 +42,24 @@
       </div>
       <nav class="sidebar-nav">
         <button class="nav-item active" data-tab="agencies">
-          <span class="nav-icon">🏢</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M3 7v14M21 7v14M6 21V10M10 21V10M14 21V10M18 21V10M3 7l9-4 9 4M6 10h12"/></svg></span>
           <span class="nav-label">Agencies</span>
-          <span class="nav-hint">Manage agencies</span>
         </button>
         <button class="nav-item" data-tab="users">
-          <span class="nav-icon">👥</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
           <span class="nav-label">Users</span>
-          <span class="nav-hint">Manage access</span>
         </button>
         <button class="nav-item" data-tab="blocked">
-          <span class="nav-icon">🚫</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
           <span class="nav-label">Blocked</span>
-          <span class="nav-hint">Banned IPs</span>
         </button>
         <button class="nav-item" data-tab="keys">
-          <span class="nav-icon">🔑</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span>
           <span class="nav-label">Licenses</span>
-          <span class="nav-hint">Keys & activation</span>
         </button>
       </nav>
       <div class="sidebar-footer">
-        <div class="theme-toggle-wrap glass-pill">
+        <div class="theme-toggle-wrap">
           <select id="themeSelect" class="theme-select" aria-label="Theme">
             <option value="system">System</option>
             <option value="light">Light</option>
@@ -73,7 +67,7 @@
           </select>
         </div>
         <button class="logout-btn" onclick="logout()">
-          <span class="nav-icon">↪</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></span>
           <span>Sign out</span>
         </button>
       </div>
@@ -81,7 +75,7 @@
 
     <!-- Main Content -->
     <main class="main">
-      <button id="sidebarToggle" class="sidebar-toggle" aria-label="Menu">≡</button>
+      <button id="sidebarToggle" class="sidebar-toggle" aria-label="Menu">&equiv;</button>
 
       <!-- Page Header -->
       <header class="page-header">
@@ -89,25 +83,25 @@
         <p id="pageDesc" class="page-desc">Create and manage agencies, generate codes, control access.</p>
       </header>
 
-      <!-- Stats — Glass Cards -->
+      <!-- Stats -->
       <section class="stats-grid">
-        <div class="stat-card glass-card" data-stat="users">
+        <div class="stat-card" data-stat="users">
           <span class="stat-value" id="totalUsers">0</span>
           <span class="stat-label">Total Users</span>
         </div>
-        <div class="stat-card glass-card" data-stat="online">
+        <div class="stat-card" data-stat="online">
           <span class="stat-value green" id="onlineUsers">0</span>
           <span class="stat-label">Online now</span>
         </div>
-        <div class="stat-card glass-card" data-stat="blocked">
+        <div class="stat-card" data-stat="blocked">
           <span class="stat-value red" id="blockedUsers">0</span>
           <span class="stat-label">Blocked</span>
         </div>
-        <div class="stat-card glass-card" data-stat="messages">
+        <div class="stat-card" data-stat="messages">
           <span class="stat-value blue" id="totalMessages">0</span>
           <span class="stat-label">Messages sent</span>
         </div>
-        <div class="stat-card glass-card" data-stat="keys">
+        <div class="stat-card" data-stat="keys">
           <span class="stat-value" id="statActiveKeys">0/0</span>
           <span class="stat-label">Active keys</span>
         </div>
@@ -119,11 +113,11 @@
           <div class="section-toolbar">
             <div class="toolbar-left">
               <h2 id="usersTitle">All Users</h2>
-              <div class="segmented-control glass-pill" id="usersViewToggle">
+              <div class="segmented-control" id="usersViewToggle">
                 <button class="segmented-btn active" data-view="ip" title="Group by IP address">By IP</button>
                 <button class="segmented-btn" data-view="device" title="One row per device">By Device</button>
               </div>
-              <div class="segmented-control glass-pill" id="usersFilterTabs">
+              <div class="segmented-control" id="usersFilterTabs">
                 <button class="segmented-btn" data-filter="all">All <span class="badge" id="filterCountAll">0</span></button>
                 <button class="segmented-btn active" data-filter="active">Licensed <span class="badge" id="filterCountActive">0</span></button>
                 <button class="segmented-btn" data-filter="inactive">Inactive <span class="badge" id="filterCountInactive">0</span></button>
@@ -131,15 +125,17 @@
             </div>
             <div class="toolbar-right">
               <div class="search-wrap glass-input-wrap">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="searchInput" class="search-input" placeholder="Search IP, location, note…">
+                <span class="search-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input type="text" id="searchInput" class="search-input" placeholder="Search IP, location, note...">
               </div>
-              <button class="btn-secondary glass-pill" id="findDuplicatesBtn" data-action="find-duplicates" style="display:none;">Find duplicates</button>
-              <button class="btn-primary glass-pill" id="exportUsersBtn" data-action="export-users" style="display:none;">Export CSV</button>
+              <button class="btn-secondary" id="findDuplicatesBtn" data-action="find-duplicates" style="display:none;">Find duplicates</button>
+              <button class="btn-primary" id="exportUsersBtn" data-action="export-users" style="display:none;">Export CSV</button>
             </div>
           </div>
 
-          <div id="usersBulkBar" class="bulk-bar glass-bar" style="display:none;">
+          <div id="usersBulkBar" class="bulk-bar" style="display:none;">
             <span id="bulkSelectedCount">0 selected</span>
             <button class="btn-secondary" data-action="bulk-deselect">Cancel</button>
             <button class="btn-warning" data-action="bulk-block">Block</button>
@@ -166,7 +162,7 @@
             </table>
           </div>
 
-          <div id="usersPagination" class="pagination glass-bar" style="display:none;">
+          <div id="usersPagination" class="pagination" style="display:none;">
             <span class="pagination-info" id="paginationInfo">Page 1</span>
             <div class="pagination-controls">
               <select id="pageSizeSelect" class="page-size-select">
@@ -174,8 +170,8 @@
                 <option value="50">50 per page</option>
                 <option value="100">100 per page</option>
               </select>
-              <button class="pagination-btn" id="prevPageBtn">← Previous</button>
-              <button class="pagination-btn" id="nextPageBtn">Next →</button>
+              <button class="pagination-btn" id="prevPageBtn">&larr; Previous</button>
+              <button class="pagination-btn" id="nextPageBtn">Next &rarr;</button>
             </div>
           </div>
         </div>
@@ -203,14 +199,14 @@
           <h2>License Keys</h2>
           <p class="section-desc">Generate and manage license keys for users.</p>
         </div>
-        <div class="key-stats glass-card">
+        <div class="key-stats">
           <div class="key-stat"><strong id="keyStat-total">0</strong><span>Total</span></div>
           <div class="key-stat"><strong id="keyStat-active">0</strong><span>Active</span></div>
           <div class="key-stat"><strong id="keyStat-unused">0</strong><span>Unused</span></div>
           <div class="key-stat"><strong id="keyStat-revoked">0</strong><span>Revoked</span></div>
         </div>
-        <div class="keys-toolbar glass-bar">
-          <div class="segmented-control glass-pill">
+        <div class="keys-toolbar">
+          <div class="segmented-control">
             <button class="segmented-btn active" data-filter="all">All</button>
             <button class="segmented-btn" data-filter="active">Active</button>
             <button class="segmented-btn" data-filter="unused">Unused</button>
@@ -218,19 +214,19 @@
             <button class="segmented-btn" data-filter="unassigned">Unassigned</button>
           </div>
           <div class="toolbar-right">
-            <input type="text" id="keysSearch" class="search-input glass-input" placeholder="Search keys…">
+            <input type="text" id="keysSearch" class="search-input glass-input" placeholder="Search keys...">
             <button class="btn-primary" data-action="generate-unassigned">+ New key</button>
           </div>
         </div>
         <div class="keys-layout">
-          <div class="keys-sidebar glass-card">
+          <div class="keys-sidebar">
             <h3>Users with keys</h3>
             <div class="keys-user-list" id="keysUserList"></div>
           </div>
           <div class="keys-main">
             <div id="keysPanel"></div>
             <div id="keysAllTable" class="section-card glass-card">
-              <h3>All Keys</h3>
+              <h3 style="padding:16px 16px 0;">All Keys</h3>
               <div class="table-wrap" style="max-height:420px;">
                 <table class="data-table">
                   <thead><tr><th>Key</th><th>Status</th><th>Owner</th><th>Device</th><th>Created</th><th class="col-actions">Actions</th></tr></thead>
@@ -248,10 +244,13 @@
           <h2>Agencies</h2>
           <p class="section-desc">Create and manage agencies, generate invitation codes, and control access.</p>
         </div>
-        <div class="agencies-toolbar glass-bar">
-          <button class="btn-primary glass-pill" id="createAgencyBtn">+ New Agency</button>
+        <div class="agencies-toolbar">
+          <button class="btn-primary" id="createAgencyBtn">+ New Agency</button>
           <input type="text" id="agenciesSearch" class="search-input glass-input" placeholder="Search agencies...">
-          <button class="btn-secondary glass-pill" id="goToUsersBtn" style="margin-left:auto;">👥 Users</button>
+          <button class="btn-secondary" id="goToUsersBtn" style="margin-left:auto;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+          </button>
         </div>
         <div id="agenciesList" class="agencies-grid"></div>
 
@@ -261,13 +260,13 @@
             <h3 id="agencyProfileName">Agency Name</h3>
             <div class="agency-profile-status" id="agencyProfileStatus">active</div>
             <div class="agency-profile-actions">
-              <button class="btn-warning glass-pill" id="toggleAgencyBanBtn">Ban</button>
-              <button class="btn-danger glass-pill" id="deleteAgencyBtn">Delete</button>
-              <button class="btn-secondary glass-pill" id="closeAgencyProfile">Close</button>
+              <button class="btn-warning" id="toggleAgencyBanBtn">Ban</button>
+              <button class="btn-danger" id="deleteAgencyBtn">Delete</button>
+              <button class="btn-secondary" id="closeAgencyProfile">Close</button>
             </div>
           </div>
 
-          <div class="agency-profile-tabs segmented-control glass-pill">
+          <div class="agency-profile-tabs segmented-control">
             <button class="segmented-btn active" data-agency-tab="accounts">Accounts</button>
             <button class="segmented-btn" data-agency-tab="models">Models</button>
             <button class="segmented-btn" data-agency-tab="codes">Codes</button>
@@ -286,7 +285,7 @@
           <div class="agency-tab-pane" id="agencyTabModels" style="display:none;">
             <div class="toolbar-right" style="margin-bottom:12px;">
               <input type="text" id="agencyNewModelName" class="search-input glass-input" placeholder="Model name">
-              <button class="btn-primary glass-pill" id="agencyAddModelBtn">Add Model</button>
+              <button class="btn-primary" id="agencyAddModelBtn">Add Model</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
@@ -299,7 +298,7 @@
           <div class="agency-tab-pane" id="agencyTabCodes" style="display:none;">
             <div class="toolbar-right" style="margin-bottom:12px;">
               <select id="agencyCodeTypeSelect" class="page-size-select"><option value="superadmin">Superadmin</option><option value="admin">Admin</option><option value="worker">Worker</option></select>
-              <button class="btn-primary glass-pill" id="agencyGenCodeBtn">Generate Code</button>
+              <button class="btn-primary" id="agencyGenCodeBtn">Generate Code</button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
@@ -311,12 +310,12 @@
 
           <div class="agency-tab-pane" id="agencyTabStats" style="display:none;">
             <div class="profile-stats" id="agencyStatsGrid">
-              <div class="profile-stat glass-card"><span class="val" id="agStatTotalSpend">$0</span><span class="lbl">Total Spending</span></div>
-              <div class="profile-stat glass-card"><span class="val" id="agStatAccounts">0</span><span class="lbl">Accounts</span></div>
-              <div class="profile-stat glass-card"><span class="val" id="agStatMessages">0</span><span class="lbl">Messages Sent</span></div>
-              <div class="profile-stat glass-card"><span class="val" id="agStatAI">0</span><span class="lbl">AI Requests</span></div>
-              <div class="profile-stat glass-card"><span class="val" id="agStatParses">0</span><span class="lbl">Parses</span></div>
-              <div class="profile-stat glass-card"><span class="val" id="agStatTransactions">0</span><span class="lbl">Transactions</span></div>
+              <div class="profile-stat"><span class="val" id="agStatTotalSpend">$0</span><span class="lbl">Total Spending</span></div>
+              <div class="profile-stat"><span class="val" id="agStatAccounts">0</span><span class="lbl">Accounts</span></div>
+              <div class="profile-stat"><span class="val" id="agStatMessages">0</span><span class="lbl">Messages Sent</span></div>
+              <div class="profile-stat"><span class="val" id="agStatAI">0</span><span class="lbl">AI Requests</span></div>
+              <div class="profile-stat"><span class="val" id="agStatParses">0</span><span class="lbl">Parses</span></div>
+              <div class="profile-stat"><span class="val" id="agStatTransactions">0</span><span class="lbl">Transactions</span></div>
             </div>
 
             <h4 style="margin:20px 0 8px;">Spending by Model</h4>
@@ -361,29 +360,29 @@
 
       <!-- USER PROFILE -->
       <section id="userProfileSection" class="content-section" style="display:none;">
-        <button onclick="closeUserProfile()" class="back-btn glass-pill">← Back to Users</button>
-        <div class="profile-card glass-card">
+        <button onclick="closeUserProfile()" class="back-btn">&larr; Back to Users</button>
+        <div class="profile-card">
           <div class="profile-header">
             <div class="profile-avatar" id="profileAvatar">??</div>
             <div class="profile-info">
-              <div class="profile-ip" id="profileIP">—</div>
-              <div class="profile-id mono" id="profileDeviceId">—</div>
+              <div class="profile-ip" id="profileIP">&mdash;</div>
+              <div class="profile-id mono" id="profileDeviceId">&mdash;</div>
               <div class="profile-note" id="profileNote">No note</div>
               <div id="profileStatus"></div>
             </div>
             <div class="profile-actions">
-              <button onclick="refreshUserProfile()" class="btn-secondary glass-pill">↻ Refresh</button>
-              <button onclick="exportUserData()" class="btn-secondary glass-pill">↓ Export</button>
-              <button onclick="deleteCurrentUser()" class="btn-danger glass-pill">🗑 Delete</button>
+              <button onclick="refreshUserProfile()" class="btn-secondary">&circlearrowright; Refresh</button>
+              <button onclick="exportUserData()" class="btn-secondary">&darr; Export</button>
+              <button onclick="deleteCurrentUser()" class="btn-danger">Delete</button>
             </div>
           </div>
           <div class="profile-stats">
-            <div class="profile-stat glass-card"><span class="val" id="profileMessages">0</span><span class="lbl">Messages</span></div>
-            <div class="profile-stat glass-card"><span class="val" id="profileParses">0</span><span class="lbl">Parses</span></div>
-            <div class="profile-stat glass-card"><span class="val" id="profileSessions">0</span><span class="lbl">Sessions</span></div>
-            <div class="profile-stat glass-card"><span class="val" id="profileAIRequests">0</span><span class="lbl">AI requests</span></div>
+            <div class="profile-stat"><span class="val" id="profileMessages">0</span><span class="lbl">Messages</span></div>
+            <div class="profile-stat"><span class="val" id="profileParses">0</span><span class="lbl">Parses</span></div>
+            <div class="profile-stat"><span class="val" id="profileSessions">0</span><span class="lbl">Sessions</span></div>
+            <div class="profile-stat"><span class="val" id="profileAIRequests">0</span><span class="lbl">AI requests</span></div>
           </div>
-          <div class="profile-tabs segmented-control glass-pill">
+          <div class="profile-tabs segmented-control">
             <button class="segmented-btn active" data-tab="info">Info</button>
             <button class="segmented-btn" data-tab="invites">Invites</button>
             <button class="segmented-btn" data-tab="database">Database</button>
@@ -394,59 +393,59 @@
           <div class="profile-content">
             <div class="profile-tab-pane active" id="tabInfo">
               <div class="info-grid">
-                <div class="info-item glass-card"><span class="label">OS</span><span class="value" id="infoOS">—</span></div>
-                <div class="info-item glass-card"><span class="label">Browser</span><span class="value" id="infoBrowser">—</span></div>
-                <div class="info-item glass-card"><span class="label">Language</span><span class="value" id="infoLanguage">—</span></div>
-                <div class="info-item glass-card"><span class="label">Timezone</span><span class="value" id="infoTimezone">—</span></div>
-                <div class="info-item glass-card"><span class="label">Country</span><span class="value" id="infoCountry">—</span></div>
-                <div class="info-item glass-card"><span class="label">City</span><span class="value" id="infoCity">—</span></div>
-                <div class="info-item glass-card"><span class="label">Region</span><span class="value" id="infoRegion">—</span></div>
-                <div class="info-item glass-card"><span class="label">First seen</span><span class="value" id="infoFirstSeen">—</span></div>
-                <div class="info-item glass-card"><span class="label">Last activity</span><span class="value" id="infoLastActivity">—</span></div>
-                <div class="info-item glass-card"><span class="label">Device ID</span><span class="value mono" id="infoDeviceId">—</span></div>
-                <div class="info-item glass-card"><span class="label">Version</span><span class="value" id="infoVersion">—</span></div>
+                <div class="info-item"><span class="label">OS</span><span class="value" id="infoOS">&mdash;</span></div>
+                <div class="info-item"><span class="label">Browser</span><span class="value" id="infoBrowser">&mdash;</span></div>
+                <div class="info-item"><span class="label">Language</span><span class="value" id="infoLanguage">&mdash;</span></div>
+                <div class="info-item"><span class="label">Timezone</span><span class="value" id="infoTimezone">&mdash;</span></div>
+                <div class="info-item"><span class="label">Country</span><span class="value" id="infoCountry">&mdash;</span></div>
+                <div class="info-item"><span class="label">City</span><span class="value" id="infoCity">&mdash;</span></div>
+                <div class="info-item"><span class="label">Region</span><span class="value" id="infoRegion">&mdash;</span></div>
+                <div class="info-item"><span class="label">First seen</span><span class="value" id="infoFirstSeen">&mdash;</span></div>
+                <div class="info-item"><span class="label">Last activity</span><span class="value" id="infoLastActivity">&mdash;</span></div>
+                <div class="info-item"><span class="label">Device ID</span><span class="value mono" id="infoDeviceId">&mdash;</span></div>
+                <div class="info-item"><span class="label">Version</span><span class="value" id="infoVersion">&mdash;</span></div>
               </div>
             </div>
             <div class="profile-tab-pane" id="tabInvites"><div id="invitesGrid"></div></div>
             <div class="profile-tab-pane" id="tabDatabase">
               <div class="section-card glass-card">
-                <h3>Followers <span id="databaseCount" class="muted">0</span></h3>
-                <input type="text" id="databaseSearch" class="search-input glass-input" placeholder="Search followers…">
+                <h3 style="padding:16px 16px 8px;">Followers <span id="databaseCount" class="muted">0</span></h3>
+                <div style="padding:0 16px 12px;"><input type="text" id="databaseSearch" class="search-input glass-input" placeholder="Search followers..." style="width:100%;"></div>
                 <div class="table-wrap" style="max-height:360px;"><table class="data-table"><thead><tr><th>#</th><th>Nickname</th><th>Status</th><th>Invited</th></tr></thead><tbody id="databaseTableBody"></tbody></table></div>
               </div>
             </div>
             <div class="profile-tab-pane" id="tabHistory">
-              <div class="section-card glass-card">
-                <h3>Send History</h3>
+              <div class="section-card glass-card" style="padding:16px;">
+                <h3 style="margin-bottom:12px;">Send History</h3>
                 <div id="historyList" class="history-list"></div>
               </div>
             </div>
             <div class="profile-tab-pane" id="tabSettings">
               <div class="info-grid">
-                <div class="info-item glass-card"><span class="label">Groq API Key</span><span class="value mono" id="settingsGroqKey">—</span></div>
-                <div class="info-item glass-card"><span class="label">Theme</span><span class="value" id="settingsTheme">—</span></div>
-                <div class="info-item glass-card"><span class="label">Language</span><span class="value" id="settingsLanguage">—</span></div>
+                <div class="info-item"><span class="label">Groq API Key</span><span class="value mono" id="settingsGroqKey">&mdash;</span></div>
+                <div class="info-item"><span class="label">Theme</span><span class="value" id="settingsTheme">&mdash;</span></div>
+                <div class="info-item"><span class="label">Language</span><span class="value" id="settingsLanguage">&mdash;</span></div>
               </div>
             </div>
             <div class="profile-tab-pane" id="tabTracker">
               <div class="profile-stats">
-                <div class="profile-stat glass-card"><span class="val green" id="trackerTotalSpent">$0</span><span class="lbl">Total spent</span></div>
-                <div class="profile-stat glass-card"><span class="val blue" id="trackerTransactions">0</span><span class="lbl">Transactions</span></div>
-                <div class="profile-stat glass-card"><span class="val" id="trackerUniqueUsers">0</span><span class="lbl">Unique users</span></div>
-                <div class="profile-stat glass-card"><span class="val" id="trackerNotes">0</span><span class="lbl">Notes</span></div>
+                <div class="profile-stat"><span class="val green" id="trackerTotalSpent">$0</span><span class="lbl">Total spent</span></div>
+                <div class="profile-stat"><span class="val blue" id="trackerTransactions">0</span><span class="lbl">Transactions</span></div>
+                <div class="profile-stat"><span class="val" id="trackerUniqueUsers">0</span><span class="lbl">Unique users</span></div>
+                <div class="profile-stat"><span class="val" id="trackerNotes">0</span><span class="lbl">Notes</span></div>
               </div>
-              <div class="section-card glass-card">
-                <h3>Tracker</h3>
-                <div class="toolbar-right">
-                  <input type="text" id="trackerSearch" class="search-input glass-input" placeholder="Search…">
-                  <select id="trackerSort"><option value="spent">By spent</option><option value="transactions">By txns</option><option value="rank">By rank</option><option value="recent">Recent</option></select>
+              <div class="section-card glass-card" style="padding:16px;">
+                <h3 style="margin-bottom:12px;">Tracker</h3>
+                <div class="toolbar-right" style="margin-bottom:12px;">
+                  <input type="text" id="trackerSearch" class="search-input glass-input" placeholder="Search...">
+                  <select id="trackerSort" class="page-size-select"><option value="spent">By spent</option><option value="transactions">By txns</option><option value="rank">By rank</option><option value="recent">Recent</option></select>
                 </div>
                 <div class="table-wrap" style="max-height:360px;"><table class="data-table"><thead><tr><th>User</th><th>Spent</th><th>Txns</th><th>Rank</th><th>Last payment</th><th>Note</th></tr></thead><tbody id="trackerTableBody"></tbody></table></div>
               </div>
               <div class="tracker-extras">
-                <div class="tracker-card glass-card"><h4>📝 Notes</h4><div id="trackerNotesSection"></div></div>
-                <div class="tracker-card glass-card"><h4>💰 Transactions</h4><div id="trackerLastTransactionsSection"></div></div>
-                <div class="tracker-card glass-card wide"><h4>📤 Last sent</h4><div id="trackerLastSentSection"></div></div>
+                <div class="tracker-card"><h4>Notes</h4><div id="trackerNotesSection"></div></div>
+                <div class="tracker-card"><h4>Transactions</h4><div id="trackerLastTransactionsSection"></div></div>
+                <div class="tracker-card wide"><h4>Last sent</h4><div id="trackerLastSentSection"></div></div>
               </div>
             </div>
           </div>
@@ -457,21 +456,21 @@
 
   <!-- MODAL -->
   <div id="modalOverlay" class="modal-overlay">
-    <div class="modal glass-card">
+    <div class="modal">
       <h3 id="modalTitle"></h3>
       <div id="modalContent"></div>
       <div class="modal-actions">
-        <button class="btn-secondary glass-pill" onclick="closeModal()">Cancel</button>
-        <button class="btn-primary glass-pill" id="modalConfirm">Confirm</button>
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" id="modalConfirm">Confirm</button>
       </div>
     </div>
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
-  <div id="errorBoundary" class="error-boundary glass-card" style="display:none;">
+  <div id="errorBoundary" class="error-boundary" style="display:none;">
     <h2>Something went wrong</h2>
     <p id="errorBoundaryMsg"></p>
-    <button onclick="location.reload()" class="btn-primary glass-pill">Reload</button>
+    <button onclick="location.reload()" class="btn-primary">Reload</button>
   </div>
 
   <script src="admin.js"></script>
