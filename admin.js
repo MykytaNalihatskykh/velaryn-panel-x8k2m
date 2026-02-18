@@ -1523,27 +1523,42 @@ function renderAgenciesList() {
 document.getElementById('agenciesSearch')?.addEventListener('input', renderAgenciesList);
 
 document.getElementById('createAgencyBtn')?.addEventListener('click', () => {
+  const autoKey = generateCodeStr('VLR');
   openModal('Create Agency', `
     <label>Agency Name</label>
-    <input type="text" id="newAgencyName" class="search-input glass-input" placeholder="Agency name" style="width:100%;margin-bottom:8px;">
-    <label>License Key (optional)</label>
-    <input type="text" id="newAgencyKey" class="search-input glass-input" placeholder="VLR-XXXX-XXXX-XXXX" style="width:100%;">
+    <input type="text" id="newAgencyName" class="search-input glass-input" placeholder="Agency name" style="width:100%;margin-bottom:12px;">
+    <label>License Key <span style="opacity:.5">(auto-generated)</span></label>
+    <input type="text" id="newAgencyKey" class="search-input glass-input mono" value="${autoKey}" style="width:100%;" readonly>
   `, async () => {
     const name = document.getElementById('newAgencyName')?.value.trim();
     if (!name) { showToast('Enter a name', 'error'); return; }
-    const key = document.getElementById('newAgencyKey')?.value.trim() || null;
+    const key = document.getElementById('newAgencyKey')?.value.trim() || autoKey;
     try {
-      await sbPost('agencies', { name, license_key: key, status: 'active' });
-      const agencies = await sbGet(`agencies?name=eq.${encodeURIComponent(name)}&select=id`);
-      if (agencies && agencies[0]) {
-        // Generate first admin code
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/agencies`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({ name, license_key: key, status: 'active' })
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`${resp.status}: ${errText}`);
+      }
+      const created = await resp.json();
+      const agencyId = created[0]?.id;
+      if (agencyId) {
         const code = generateCodeStr('ADM');
-        await sbPost('agency_codes', { agency_id: agencies[0].id, code, type: 'admin', status: 'unused' });
-        showToast(`Agency created! Admin code: ${code}`, 'success', 10000);
+        await fetch(`${SUPABASE_URL}/rest/v1/agency_codes`, {
+          method: 'POST',
+          headers: { ...sbHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ agency_id: agencyId, code, type: 'admin', status: 'unused' })
+        });
+        showToast(`Agency created! Admin code: ${code}`, 'success', 15000);
+      } else {
+        showToast('Agency created, but could not get ID for admin code', 'warning');
       }
       closeModal();
       loadAgencies();
-    } catch (e) { showToast('Failed to create agency: ' + (e.message || e), 'error'); }
+    } catch (e) { showToast('Failed to create agency: ' + (e.message || e), 'error', 8000); }
   });
 });
 
