@@ -1067,6 +1067,20 @@ html[data-theme="dark"] .modal {
 .agency-profile-tabs { margin-bottom: 16px; }
 .agency-tab-pane { padding: 0; }
 
+.agency-accounts-header {
+  display: flex; align-items: center; margin-bottom: 8px; min-height: 24px;
+}
+.agency-live-indicator {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+  font-size: 11px; font-weight: 600; color: var(--success); background: var(--success-soft);
+  border-radius: 6px; text-transform: uppercase;
+}
+.agency-activity {
+  font-size: 12px; font-family: var(--font-mono, 'SF Mono', monospace); padding: 2px 6px; border-radius: 4px;
+}
+.agency-activity-active { background: var(--success-soft); color: var(--success); font-weight: 500; }
+.agency-activity-idle { color: var(--text-tertiary); background: transparent; }
+
 /* --- TABLE CELL HELPERS (used by admin.js templates) --- */
 .table-card { margin-bottom: 16px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius-md); box-shadow: var(--card-shadow); }
 .table-header { padding: 14px 16px; font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--table-border); }
