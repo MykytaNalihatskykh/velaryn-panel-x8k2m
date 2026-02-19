@@ -1589,9 +1589,24 @@ async function toggleAgencyBan(id, currentStatus) {
 }
 
 async function deleteAgency(id) {
-  if (!confirm('Delete this agency and ALL its accounts, models, and codes? This cannot be undone!')) return;
+  if (!confirm('Delete this agency and ALL its accounts, models, codes, notes, transactions? This cannot be undone!')) return;
   try {
+    const accounts = await sbGet(`agency_accounts?agency_id=eq.${id}&select=id`);
+    const accountIds = (accounts || []).map(a => a.id);
+
+    if (accountIds.length > 0) {
+      const acFilter = accountIds.map(aid => `account_id.eq.${aid}`).join(',');
+      await sbDelete(`agency_account_devices?or=(${acFilter})`);
+      await sbDelete(`agency_account_models?or=(${acFilter})`);
+    }
+    try { await sbDelete(`agency_notes?agency_id=eq.${id}`); } catch (_) {}
+    try { await sbDelete(`agency_transactions?agency_id=eq.${id}`); } catch (_) {}
+    try { await sbDelete(`agency_activity_log?agency_id=eq.${id}`); } catch (_) {}
+    await sbDelete(`agency_codes?agency_id=eq.${id}`);
+    await sbDelete(`agency_accounts?agency_id=eq.${id}`);
+    await sbDelete(`agency_models?agency_id=eq.${id}`);
     await sbDelete(`agencies?id=eq.${id}`);
+
     showToast('Agency deleted', 'success');
     currentAgencyId = null;
     setDisplay('agencyProfile', 'none');
