@@ -27,6 +27,8 @@ let usersSelectedIds = new Set();
 let loadAbortController = null;
 let usersViewMode = 'ip'; // 'ip' | 'device' — по умолчанию группировка по IP
 let expandedIPs = new Set();
+let agencyRealtimeUnsubscribe = null;
+let agencyPollingInterval = null;
 
 // ===== THEME =====
 function applyTheme(theme) {
@@ -1625,10 +1627,16 @@ async function openAgencyProfile(id) {
   document.getElementById('toggleAgencyBanBtn').textContent = agency.status === 'active' ? 'Ban' : 'Unban';
   document.getElementById('toggleAgencyBanBtn').onclick = () => toggleAgencyBan(id, agency.status);
   document.getElementById('deleteAgencyBtn').onclick = () => deleteAgency(id);
-  document.getElementById('closeAgencyProfile').onclick = () => { setDisplay('agencyProfile', 'none'); currentAgencyId = null; };
+  document.getElementById('closeAgencyProfile').onclick = () => {
+    unsubscribeAgencyWorkersRealtime();
+    setDisplay('agencyProfile', 'none');
+    currentAgencyId = null;
+  };
 
   setDisplay('agencyProfile', 'block');
-  loadAgencyAccounts(id);
+  const accounts = await loadAgencyAccounts(id);
+  const accountIds = (accounts || []).map(a => a.id);
+  subscribeAgencyWorkersRealtime(id, accountIds);
   loadAgencyModelsAdmin(id);
   loadAgencyCodesAdmin(id);
 
@@ -1642,6 +1650,82 @@ async function openAgencyProfile(id) {
       if (btn.dataset.agencyTab === 'stats') loadAgencyStats(id);
     };
   });
+}
+
+function subscribeAgencyWorkersRealtime(agencyId, accountIds) {
+  unsubscribeAgencyWorkersRealtime();
+  if (!agencyId || !accountIds || accountIds.length === 0) return;
+  const supabaseLib = typeof window !== 'undefined' && window.supabase;
+  if (!supabaseLib?.createClient) return;
+
+  try {
+    const client = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const refreshAccounts = () => { if (currentAgencyId === agencyId) loadAgencyAccounts(agencyId); };
+
+    const setLiveIndicator = (on) => {
+      const ind = document.getElementById('agencyLiveIndicator');
+      if (ind) ind.style.display = on ? 'inline-flex' : 'none';
+    };
+
+    const channelDevices = client.channel(`agency-devices-${agencyId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'agency_account_devices',
+        filter: `account_id=in.(${accountIds.join(',')})`
+      }, refreshAccounts)
+      .subscribe((status) => {
+        setLiveIndicator(status === 'SUBSCRIBED');
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startAgencyPolling(agencyId);
+      });
+
+    const channelAccounts = client.channel(`agency-accounts-${agencyId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'agency_accounts',
+        filter: `agency_id=eq.${agencyId}`
+      }, refreshAccounts)
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startAgencyPolling(agencyId);
+      });
+
+    agencyRealtimeUnsubscribe = () => {
+      try { client.removeChannel(channelDevices); } catch (e) {}
+      try { client.removeChannel(channelAccounts); } catch (e) {}
+      agencyRealtimeUnsubscribe = null;
+      const ind = document.getElementById('agencyLiveIndicator');
+      if (ind) ind.style.display = 'none';
+    };
+  } catch (e) {
+    console.warn('[Admin] Realtime subscribe failed, using polling:', e.message);
+    console.warn('[Admin] To enable Realtime: Supabase Dashboard → Database → Replication → add agency_account_devices, agency_accounts to supabase_realtime publication.');
+    startAgencyPolling(agencyId);
+  }
+}
+
+function unsubscribeAgencyWorkersRealtime() {
+  if (agencyRealtimeUnsubscribe) {
+    agencyRealtimeUnsubscribe();
+    agencyRealtimeUnsubscribe = null;
+  }
+  stopAgencyPolling();
+  const ind = document.getElementById('agencyLiveIndicator');
+  if (ind) ind.style.display = 'none';
+}
+
+function startAgencyPolling(agencyId) {
+  stopAgencyPolling();
+  agencyPollingInterval = setInterval(() => {
+    if (currentAgencyId === agencyId) loadAgencyAccounts(agencyId);
+  }, 15000);
+}
+
+function stopAgencyPolling() {
+  if (agencyPollingInterval) {
+    clearInterval(agencyPollingInterval);
+    agencyPollingInterval = null;
+  }
 }
 
 async function loadAgencyAccounts(agencyId) {
@@ -1660,7 +1744,7 @@ async function loadAgencyAccounts(agencyId) {
     let devicesByAcc = {};
     if (accountIds.length > 0) {
       const acFilter = accountIds.map(id => `account_id.eq.${id}`).join(',');
-      const devRows = await sbGet(`agency_account_devices?or=(${acFilter})&select=account_id,device_id,model_id,is_online,last_seen,agency_models:model_id(name)`);
+      const devRows = await sbGet(`agency_account_devices?or=(${acFilter})&select=account_id,device_id,model_id,is_online,last_seen,idle_state,idle_since,current_page,agency_models:model_id(name)`);
       (devRows || []).forEach(d => {
         if (!devicesByAcc[d.account_id]) devicesByAcc[d.account_id] = [];
         devicesByAcc[d.account_id].push(d);
@@ -1687,24 +1771,43 @@ async function loadAgencyAccounts(agencyId) {
             return `${dStatus} ${esc(dModel)}`;
           }).join('<br>')
         : '—';
+      const onlineDevs = devices.filter(d => d.is_online);
+      const devWithState = onlineDevs.sort((a,b) => (b.last_seen || '').localeCompare(a.last_seen || ''))[0];
+      let idleDisplay = '—';
+      if (devWithState?.idle_state) {
+        if (devWithState.idle_state === 'active') idleDisplay = 'Active';
+        else if (devWithState.idle_state === 'locked') idleDisplay = 'Locked';
+        else if (devWithState.idle_since) { const min = Math.floor((Date.now() - new Date(devWithState.idle_since).getTime()) / 60000); idleDisplay = `Idle ${min}m`; }
+      }
+      const pageDisplay = devWithState?.current_page || '—';
       const limits = a.role === 'worker' ? `S:${a.daily_send_limit ?? '∞'} AI:${a.daily_ai_limit ?? '∞'} P:${a.daily_parse_limit ?? '∞'}` : '—';
       const lastSeen = devices.length > 0
         ? fmtDate(devices.reduce((latest, d) => (!latest || (d.last_seen && d.last_seen > latest) ? d.last_seen : latest), null) || a.last_seen)
         : (a.last_seen ? fmtDate(a.last_seen) : '—');
-      return `<tr>
+      const sToday = a.sends_today ?? 0;
+      const aiToday = a.ai_requests_today ?? 0;
+      const pToday = a.parses_today ?? 0;
+      const hasActivity = sToday > 0 || aiToday > 0 || pToday > 0;
+      const activityClass = hasActivity ? 'agency-activity-active' : 'agency-activity-idle';
+      const activityToday = a.role === 'worker' ? `<span class="agency-activity ${activityClass}" title="Sends / AI / Parses today">${sToday}/${aiToday}/${pToday}</span>` : '—';
+      return `<tr data-account-id="${a.id}">
         <td>${esc(a.display_name)}</td>
         <td class="mono">${esc(a.username)}</td>
         <td><span class="badge ${a.role === 'superadmin' ? 'purple' : a.role === 'admin' ? 'orange' : 'green'}">${a.role}</span></td>
         <td>${esc(models)}</td>
         <td><span class="badge ${a.status === 'active' ? 'green' : 'red'}">${a.status}</span></td>
         <td>${onlineBadge}</td>
+        <td>${esc(idleDisplay)}</td>
+        <td>${esc(pageDisplay)}</td>
         <td>${lastSeen}</td>
+        <td>${activityToday}</td>
         <td>${limits}</td>
         <td style="font-size:11px">${deviceDetails}</td>
         <td><button class="btn-danger" onclick="deleteAgencyAccountAdmin('${a.id}')">Delete</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="10" class="empty-row">No accounts</td></tr>';
-  } catch (e) { showToast('Failed to load accounts', 'error'); }
+    }).join('') || '<tr><td colspan="13" class="empty-row">No accounts</td></tr>';
+    return accounts;
+  } catch (e) { showToast('Failed to load accounts', 'error'); return []; }
 }
 
 async function loadAgencyModelsAdmin(agencyId) {
@@ -1953,6 +2056,25 @@ async function loadAgencyStats(agencyId) {
       <td>${esc(l.target_type || '—')}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${l.details ? esc(JSON.stringify(l.details)) : '—'}</td>
     </tr>`).join('') || '<tr><td colspan="5" class="empty-row">No activity yet</td></tr>';
+
+    let chatLog = [];
+    try {
+      chatLog = await sbGet(`agency_chat_log?agency_id=eq.${agencyId}&select=*,agency_accounts:account_id(display_name),agency_models:model_id(name)&order=created_at.desc&limit=100`);
+    } catch (_) { chatLog = []; }
+    const chatLogTbody = document.getElementById('agencyStatsChatLogTable');
+    if (chatLogTbody) {
+      chatLogTbody.innerHTML = (chatLog || []).map(c => {
+        const msg = (c.message_text || '').substring(0, 200);
+        const msgDisplay = msg.length < (c.message_text || '').length ? msg + '…' : msg;
+        return `<tr>
+          <td>${fmtDate(c.created_at)}</td>
+          <td>${esc(c.agency_accounts?.display_name || '—')}</td>
+          <td>${esc(c.fan_nick || '—')}</td>
+          <td><span class="badge ${c.direction === 'sent' ? 'green' : 'blue'}">${esc(c.direction || 'sent')}</span></td>
+          <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;font-size:12px;" title="${esc(c.message_text || '')}">${esc(msgDisplay)}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" class="empty-row">No chat messages yet. Run supabase_migrations.sql to create agency_chat_log table.</td></tr>';
+    }
   } catch (e) {
     console.error('loadAgencyStats error:', e);
     showToast('Failed to load agency stats', 'error');
