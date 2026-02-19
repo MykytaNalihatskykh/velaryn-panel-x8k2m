@@ -270,9 +270,12 @@
           </div>
 
           <div class="agency-tab-pane active" id="agencyTabAccounts">
+            <div class="agency-accounts-header">
+              <span class="agency-live-indicator" id="agencyLiveIndicator" style="display:none;" title="Real-time updates active">Live</span>
+            </div>
             <div class="table-wrap">
               <table class="data-table">
-                <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Models</th><th>Status</th><th>Online</th><th>Last seen</th><th>Limits</th><th>Devices</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Models</th><th>Status</th><th>Online</th><th>Idle</th><th>Page</th><th>Last seen</th><th>Activity today</th><th>Limits</th><th>Devices</th><th>Actions</th></tr></thead>
                 <tbody id="agencyAccountsTable"></tbody>
               </table>
             </div>
@@ -351,6 +354,14 @@
               <table class="data-table">
                 <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
                 <tbody id="agencyStatsLogTable"></tbody>
+              </table>
+            </div>
+
+            <h4 style="margin:20px 0 8px;">Chat Log (admin monitoring)</h4>
+            <div class="table-wrap" style="max-height:300px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Time</th><th>Worker</th><th>Fan</th><th>Direction</th><th>Message</th></tr></thead>
+                <tbody id="agencyStatsChatLogTable"></tbody>
               </table>
             </div>
 
@@ -485,6 +496,7 @@
     <button onclick="location.reload()" class="btn-primary">Reload</button>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="admin.js"></script>
 </body>
 </html>
